@@ -86,7 +86,7 @@ repos:
       - id: pydocstyle
         args:
           - --convention=google
-          - --add-ignore=D100,D101,D102,D103,D104,D105,D107
+          - --add-ignore=D100,D101,D102,D103,D104,D105,D107,D212
         exclude: ^(tests/|setup\.py|docs/)
 
   # MyPy - Static type checking
