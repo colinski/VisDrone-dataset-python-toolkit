@@ -35,16 +35,12 @@ class VisDroneDataset(Dataset):
         transforms: Callable | None = None,
         filter_ignored: bool = True,
         filter_crowd: bool = True,
-        min_side: int = 600,
-        max_side: int = 1024,
-        max_long_side: int = 1333,
     ) -> None:
         self.image_dir = Path(image_dir)
         self.annotation_dir = Path(annotation_dir)
         self.transforms = transforms
         self.filter_ignored = filter_ignored
         self.filter_crowd = filter_crowd
-        self.min_side, self.max_side, self.max_long_side = min_side, max_side, max_long_side
 
         if not self.image_dir.exists():
             raise ValueError(f"Image directory does not exist: {self.image_dir}")
@@ -123,18 +119,19 @@ class VisDroneDataset(Dataset):
         # Inject dummy box if no valid boxes
         if len(boxes) == 0:
             boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]], dtype=torch.float32)
-            labels = torch.tensor([1], dtype=torch.int64)  # assign a valid class
+            labels = torch.tensor([1], dtype=torch.int64)
 
         # Original image size
         h, w = image.height, image.width
 
-        # Dynamic resize: short side 600–1024, long side clamp 1333
-        short_side = np.random.randint(600, 1025)
-        scale = short_side / min(h, w)
+        # AGGRESSIVE resize to prevent OOM
+        # Max size 800px long side (not 1333) - reduces anchors dramatically
+        target_short = 600
+        scale = target_short / min(h, w)
         new_h, new_w = int(round(h * scale)), int(round(w * scale))
 
-        # Clamp long side
-        max_long = 1333
+        # Clamp long side to 800
+        max_long = 800
         long_side = max(new_h, new_w)
         if long_side > max_long:
             scale = max_long / long_side
@@ -146,8 +143,8 @@ class VisDroneDataset(Dataset):
         # Scale boxes
         scale_w = new_w / w
         scale_h = new_h / h
-        boxes[:, [0, 2]] *= scale_w  # x coordinates
-        boxes[:, [1, 3]] *= scale_h  # y coordinates
+        boxes[:, [0, 2]] *= scale_w
+        boxes[:, [1, 3]] *= scale_h
 
         # Compute area
         area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
