@@ -12,12 +12,24 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-from torch.cuda.amp import GradScaler, autocast
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+from rich.table import Table
+from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 
 from visdrone_toolkit.dataset import VisDroneDataset
 from visdrone_toolkit.utils import collate_fn, get_model, load_checkpoint, save_checkpoint
 from visdrone_toolkit.visualization import plot_training_curves
+
+console = Console()
 
 
 def parse_args():
@@ -77,6 +89,91 @@ def parse_args():
     return parser.parse_args()
 
 
+@torch.no_grad()
+def compute_metrics(predictions, targets, iou_threshold=0.5):
+    """
+    Compute precision, recall, and mAP for object detection.
+
+    Args:
+        predictions: List of dicts with 'boxes', 'labels', 'scores'
+        targets: List of dicts with 'boxes', 'labels'
+        iou_threshold: IoU threshold for matching predictions to targets
+
+    Returns:
+        dict with precision, recall, and mAP
+    """
+    total_tp = 0
+    total_fp = 0
+    total_gt = 0
+
+    for pred, target in zip(predictions, targets):
+        pred_boxes = pred["boxes"]
+        pred_labels = pred["labels"]
+
+        gt_boxes = target["boxes"]
+        gt_labels = target["labels"]
+
+        total_gt += len(gt_boxes)
+
+        if len(pred_boxes) == 0:
+            continue
+
+        if len(gt_boxes) == 0:
+            total_fp += len(pred_boxes)
+            continue
+
+        # Compute IoU matrix
+        ious = box_iou(pred_boxes, gt_boxes)
+
+        # Match predictions to ground truth
+        matched_gt = set()
+        for i in range(len(pred_boxes)):
+            best_iou = 0
+            best_gt_idx = -1
+
+            for j in range(len(gt_boxes)):
+                if j in matched_gt:
+                    continue
+                if pred_labels[i] != gt_labels[j]:
+                    continue
+                if ious[i, j] > best_iou:
+                    best_iou = ious[i, j]
+                    best_gt_idx = j
+
+            if best_iou >= iou_threshold and best_gt_idx != -1:
+                total_tp += 1
+                matched_gt.add(best_gt_idx)
+            else:
+                total_fp += 1
+
+    precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0
+    recall = total_tp / total_gt if total_gt > 0 else 0
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+    }
+
+
+def box_iou(boxes1, boxes2):
+    """Compute IoU between two sets of boxes."""
+    area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
+    area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
+
+    lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])
+    rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])
+
+    wh = (rb - lt).clamp(min=0)
+    inter = wh[:, :, 0] * wh[:, :, 1]
+
+    union = area1[:, None] + area2 - inter
+    iou = inter / union
+
+    return iou
+
+
 def train_one_epoch(
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
@@ -85,62 +182,69 @@ def train_one_epoch(
     epoch: int,
     scaler: Optional[GradScaler] = None,
     use_amp: bool = False,
-) -> float:
-    """Train for one epoch."""
+) -> tuple[float, dict]:
+    """Train for one epoch with rich progress tracking."""
     model.train()
 
     total_loss = 0
     num_batches = len(data_loader)
 
-    print(f"\n{'='*60}")
-    print(f"Epoch {epoch} - Training")
-    print(f"{'='*60}")
+    console.print(f"\n[bold cyan]Epoch {epoch} - Training[/bold cyan]")
 
-    start_time = time.time()
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("[cyan]Training...", total=num_batches)
 
-    for batch_idx, (images, targets) in enumerate(data_loader):
-        # Move to device
-        images = [img.to(device) for img in images]
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        start_time = time.time()
 
-        # Forward pass with optional AMP
-        if use_amp and scaler is not None:
-            with autocast():
+        for _, (images, targets) in enumerate(data_loader):
+            # Move to device
+            images = [img.to(device) for img in images]
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+            # Forward pass with optional AMP
+            if use_amp and scaler is not None:
+                with autocast(device_type=device.type):
+                    loss_dict = model(images, targets)
+                    losses = sum(loss for loss in loss_dict.values())
+
+                # Backward pass
+                optimizer.zero_grad()
+                scaler.scale(losses).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
                 loss_dict = model(images, targets)
                 losses = sum(loss for loss in loss_dict.values())
 
-            # Backward pass
-            optimizer.zero_grad()
-            scaler.scale(losses).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss_dict = model(images, targets)
-            losses = sum(loss for loss in loss_dict.values())
+                # Backward pass
+                optimizer.zero_grad()
+                losses.backward()
+                optimizer.step()
 
-            # Backward pass
-            optimizer.zero_grad()
-            losses.backward()
-            optimizer.step()
+            total_loss += losses.item()
 
-        total_loss += losses.item()
-
-        # Print progress
-        if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == num_batches:
-            avg_loss = total_loss / (batch_idx + 1)
-            print(
-                f"Batch [{batch_idx + 1}/{num_batches}] - "
-                f"Loss: {losses.item():.4f} - "
-                f"Avg Loss: {avg_loss:.4f} - "
-                f"LR: {optimizer.param_groups[0]['lr']:.6f}"
+            # Update progress
+            progress.update(
+                task, advance=1, description=f"[cyan]Training (Loss: {losses.item():.4f})"
             )
 
     epoch_time = time.time() - start_time
     avg_loss = total_loss / num_batches
 
-    print(f"\nEpoch {epoch} completed in {epoch_time:.2f}s - Avg Loss: {avg_loss:.4f}")
+    console.print(
+        f"[green]✓[/green] Epoch {epoch} completed in {epoch_time:.2f}s - Avg Loss: {avg_loss:.4f}"
+    )
 
-    return avg_loss
+    return avg_loss, {"epoch_time": epoch_time}
 
 
 @torch.no_grad()
@@ -149,41 +253,79 @@ def evaluate(
     data_loader: DataLoader,
     device: torch.device,
     epoch: int,
-) -> float:
-    """Evaluate model on validation set."""
-    model.train()  # Keep in train mode for loss computation
+    score_threshold: float = 0.5,
+) -> tuple[float, dict]:
+    """Evaluate model on validation set with metrics."""
+    model.eval()  # Set to eval mode for inference
 
     total_loss = 0
+    all_predictions = []
+    all_targets = []
     num_batches = len(data_loader)
 
-    print(f"\n{'='*60}")
-    print(f"Epoch {epoch} - Validation")
-    print(f"{'='*60}")
+    console.print(f"\n[bold magenta]Epoch {epoch} - Validation[/bold magenta]")
 
-    for batch_idx, (images, targets) in enumerate(data_loader):
-        # Move to device
-        images = [img.to(device) for img in images]
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("[magenta]Validating...", total=num_batches)
 
-        # Forward pass
-        loss_dict = model(images, targets)
-        losses = sum(loss for loss in loss_dict.values())
+        for _, (images, targets) in enumerate(data_loader):
+            # Move to device
+            images = [img.to(device) for img in images]
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-        total_loss += losses.item()
+            # Get predictions
+            predictions = model(images)
 
-        # Print progress
-        if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == num_batches:
-            avg_loss = total_loss / (batch_idx + 1)
-            print(
-                f"Batch [{batch_idx + 1}/{num_batches}] - "
-                f"Loss: {losses.item():.4f} - "
-                f"Avg Loss: {avg_loss:.4f}"
-            )
+            # Filter by score threshold
+            filtered_preds = []
+            for pred in predictions:
+                keep = pred["scores"] > score_threshold
+                filtered_preds.append(
+                    {
+                        "boxes": pred["boxes"][keep],
+                        "labels": pred["labels"][keep],
+                        "scores": pred["scores"][keep],
+                    }
+                )
+
+            all_predictions.extend(filtered_preds)
+            all_targets.extend(targets)
+
+            # Compute loss (switch to train mode temporarily)
+            model.train()
+            loss_dict = model(images, targets)
+            losses = sum(loss for loss in loss_dict.values())
+            model.eval()
+
+            total_loss += losses.item()
+
+            progress.update(task, advance=1)
 
     avg_loss = total_loss / num_batches
-    print(f"\nValidation completed - Avg Loss: {avg_loss:.4f}")
 
-    return avg_loss
+    # Compute metrics
+    metrics = compute_metrics(all_predictions, all_targets, iou_threshold=0.5)
+
+    # Create metrics table
+    table = Table(title=f"Validation Metrics (Epoch {epoch})", show_header=True)
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="magenta")
+
+    table.add_row("Loss", f"{avg_loss:.4f}")
+    table.add_row("Precision", f"{metrics['precision']:.4f}")
+    table.add_row("Recall", f"{metrics['recall']:.4f}")
+    table.add_row("F1 Score", f"{metrics['f1']:.4f}")
+
+    console.print(table)
+
+    return avg_loss, metrics
 
 
 def main():
@@ -195,14 +337,19 @@ def main():
 
     # Set device
     device = torch.device(args.device)
-    print(f"Using device: {device}")
+
+    # Print header
+    console.rule("[bold blue]VisDrone Training[/bold blue]")
+    console.print(f"[cyan]Device:[/cyan] {device}")
 
     if device.type == "cuda":
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
-        print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+        console.print(f"[cyan]GPU:[/cyan] {torch.cuda.get_device_name(0)}")
+        console.print(
+            f"[cyan]Memory:[/cyan] {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB"
+        )
 
     # Create datasets
-    print("\nLoading datasets...")
+    console.print("\n[yellow]Loading datasets...[/yellow]")
     train_dataset = VisDroneDataset(
         image_dir=args.train_img_dir,
         annotation_dir=args.train_ann_dir,
@@ -241,7 +388,7 @@ def main():
         )
 
     # Create model
-    print(f"\nCreating model: {args.model}")
+    console.print(f"\n[yellow]Creating model: {args.model}[/yellow]")
     model = get_model(
         model_name=args.model,
         num_classes=args.num_classes,
@@ -252,8 +399,8 @@ def main():
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Total parameters: {total_params:,}")
-    print(f"Trainable parameters: {trainable_params:,}")
+    console.print(f"[cyan]Total parameters:[/cyan] {total_params:,}")
+    console.print(f"[cyan]Trainable parameters:[/cyan] {trainable_params:,}")
 
     # Create optimizer
     params = [p for p in model.parameters() if p.requires_grad]
@@ -274,12 +421,12 @@ def main():
     # AMP scaler
     scaler = GradScaler() if args.amp and device.type == "cuda" else None
     if args.amp:
-        print("Using Automatic Mixed Precision (AMP)")
+        console.print("[green]✓[/green] Using Automatic Mixed Precision (AMP)")
 
     # Resume from checkpoint
     start_epoch = 1
     if args.resume:
-        print(f"\nResuming from checkpoint: {args.resume}")
+        console.print(f"\n[yellow]Resuming from checkpoint: {args.resume}[/yellow]")
         start_epoch = (
             load_checkpoint(
                 args.resume,
@@ -292,56 +439,90 @@ def main():
         )
 
     # Training loop
-    print(f"\n{'='*60}")
-    print(f"Starting training for {args.epochs} epochs")
-    print(f"{'='*60}")
+    console.rule(f"[bold green]Starting training for {args.epochs} epochs[/bold green]")
 
     train_losses = []
     val_losses = []
+    val_metrics_history = []
     best_val_loss = float("inf")
+    best_f1 = 0.0
 
-    for epoch in range(start_epoch, args.epochs + 1):
-        # Train
-        train_loss = train_one_epoch(
-            model, optimizer, train_loader, device, epoch, scaler, args.amp
-        )
-        train_losses.append(train_loss)
+    try:
+        for epoch in range(start_epoch, args.epochs + 1):
+            # Train
+            train_loss, train_info = train_one_epoch(
+                model, optimizer, train_loader, device, epoch, scaler, args.amp
+            )
+            train_losses.append(train_loss)
 
-        # Validate
-        if val_loader:
-            val_loss = evaluate(model, val_loader, device, epoch)
-            val_losses.append(val_loss)
+            # Validate
+            if val_loader:
+                val_loss, val_metrics = evaluate(model, val_loader, device, epoch)
+                val_losses.append(val_loss)
+                val_metrics_history.append(val_metrics)
 
-            # Save best model
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_path = output_dir / "best_model.pth"
+                # Save best model based on F1 score
+                if val_metrics["f1"] > best_f1:
+                    best_f1 = val_metrics["f1"]
+                    best_path = output_dir / "best_model.pth"
+                    save_checkpoint(
+                        model,
+                        optimizer,
+                        epoch,
+                        best_path,
+                        lr_scheduler,
+                        train_loss=train_loss,
+                        val_loss=val_loss,
+                    )
+                    console.print(f"[green]✓ New best model saved! F1: {best_f1:.4f}[/green]")
+
+                # Also track best validation loss
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+
+            # Update learning rate
+            lr_scheduler.step()
+
+            # Save checkpoint
+            if epoch % args.save_every == 0:
+                checkpoint_path = output_dir / f"checkpoint_epoch_{epoch}.pth"
                 save_checkpoint(
                     model,
                     optimizer,
                     epoch,
-                    best_path,
+                    checkpoint_path,
                     lr_scheduler,
                     train_loss=train_loss,
-                    val_loss=val_loss,
+                    val_loss=val_losses[-1] if val_losses else None,
                 )
-                print(f"✓ New best model saved! Val Loss: {val_loss:.4f}")
 
-        # Update learning rate
-        lr_scheduler.step()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Training interrupted by user (Ctrl+C)[/yellow]")
 
-        # Save checkpoint
-        if epoch % args.save_every == 0:
-            checkpoint_path = output_dir / f"checkpoint_epoch_{epoch}.pth"
-            save_checkpoint(
-                model,
-                optimizer,
-                epoch,
-                checkpoint_path,
-                lr_scheduler,
-                train_loss=train_loss,
-                val_loss=val_losses[-1] if val_losses else None,
+        # Save interrupt checkpoint
+        interrupt_path = output_dir / "interrupt_checkpoint.pth"
+        current_epoch = start_epoch + len(train_losses) - 1
+        save_checkpoint(
+            model,
+            optimizer,
+            current_epoch,
+            interrupt_path,
+            lr_scheduler,
+            train_loss=train_losses[-1] if train_losses else None,
+            val_loss=val_losses[-1] if val_losses else None,
+        )
+        console.print(f"[green]✓ Checkpoint saved to {interrupt_path}[/green]")
+        console.print(f"[cyan]Resume training with: --resume {interrupt_path}[/cyan]")
+
+        # Still plot what we have
+        if train_losses:
+            curves_path = output_dir / "training_curves_interrupted.png"
+            plot_training_curves(
+                train_losses, val_losses if val_losses else None, save_path=curves_path, show=False
             )
+            console.print(f"[green]✓ Partial training curves saved to {curves_path}[/green]")
+
+        return  # Exit gracefully
 
     # Save final model
     final_path = output_dir / "final_model.pth"
@@ -354,20 +535,30 @@ def main():
         train_loss=train_losses[-1],
         val_loss=val_losses[-1] if val_losses else None,
     )
-    print(f"\n✓ Final model saved to {final_path}")
+    console.print(f"\n[green]✓ Final model saved to {final_path}[/green]")
 
     # Plot training curves
     curves_path = output_dir / "training_curves.png"
     plot_training_curves(
         train_losses, val_losses if val_losses else None, save_path=curves_path, show=False
     )
-    print(f"✓ Training curves saved to {curves_path}")
+    console.print(f"[green]✓ Training curves saved to {curves_path}[/green]")
 
-    print(f"\n{'='*60}")
-    print("Training completed!")
-    print(f"{'='*60}")
-    print(f"Output directory: {output_dir}")
-    print(f"Best validation loss: {best_val_loss:.4f}")
+    # Final summary
+    console.rule("[bold blue]Training Complete[/bold blue]")
+
+    summary_table = Table(show_header=True)
+    summary_table.add_column("Metric", style="cyan")
+    summary_table.add_column("Value", style="green")
+
+    summary_table.add_row("Output Directory", str(output_dir))
+    summary_table.add_row("Best Validation Loss", f"{best_val_loss:.4f}")
+    if val_metrics_history:
+        summary_table.add_row("Best F1 Score", f"{best_f1:.4f}")
+        summary_table.add_row("Final Precision", f"{val_metrics_history[-1]['precision']:.4f}")
+        summary_table.add_row("Final Recall", f"{val_metrics_history[-1]['recall']:.4f}")
+
+    console.print(summary_table)
 
 
 if __name__ == "__main__":

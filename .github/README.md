@@ -1,138 +1,111 @@
 # VisDrone Toolkit 2.0
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
-[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![🐍 Python 3.8+](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white&style=for-the-badge)](https://www.python.org/downloads/)
+[![🔥 PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white&style=for-the-badge)](https://pytorch.org/)
+[![⚖️ License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green?logo=open-source-initiative&logoColor=white&style=for-the-badge)](LICENSE)
+[![🖤 Code style: Black](https://img.shields.io/badge/Code%20Style-Black-000000?logo=python&logoColor=white&style=for-the-badge)](https://github.com/psf/black)
 
-Modern PyTorch-based toolkit for the VisDrone dataset with state-of-the-art object detection models.
+Modern PyTorch toolkit for the VisDrone dataset with production-ready object detection models and real-time inference capabilities.
 
-## 🚀 What's New in 2.0
+---
 
-- ✅ **PyTorch-first** - Native PyTorch Dataset, modern torchvision models
-- ✅ **Multiple architectures** - Faster R-CNN, FCOS, RetinaNet (ResNet50 & MobileNet)
-- ✅ **Real-time webcam demo** - Test detection instantly with your webcam
-- ✅ **Modern formats** - COCO & YOLO converters (not just VOC)
-- ✅ **Production ready** - CLI tools, proper packaging, comprehensive tests
-- ✅ **Easy installation** - Virtualenv-based, one-command setup
+## What's New in 2.0
 
-## 📋 Table of Contents
+**Core Improvements:**
 
-- [Features](#-features)
-- [Quick Start](#-quick-start)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [Models](#-models)
-- [Documentation](#-documentation)
-- [Examples](#-examples)
-- [Contributing](#-contributing)
-- [Citation](#-citation)
-- [License](#-license)
+- PyTorch-first design with native Dataset implementation
+- Multi-architecture support: Faster R-CNN, FCOS, RetinaNet (ResNet50 & MobileNet variants)
+- Real-time webcam inference with pre-trained weights
+- Modern format converters (COCO & YOLO, not just VOC)
+- Production-ready CLI tools and comprehensive test suite
 
-## ✨ Features
+---
 
-### Core Components
-
-- **PyTorch Dataset** - Native VisDrone format support with automatic filtering
-- **Model Zoo** - 4 pre-configured detection models (Faster R-CNN, FCOS, RetinaNet)
-- **Format Converters** - Convert to COCO or YOLO with validation
-- **Visualization Tools** - Publication-ready plots and detection overlays
-- **CLI Tools** - Train, evaluate, and infer with simple commands
-
-### Training
-
-- Automatic mixed precision (AMP) for faster training
-- Multi-GPU support
-- Learning rate scheduling
-- Checkpointing and resuming
-- Training curve visualization
-
-### Inference
-
-- Real-time webcam detection
-- Batch inference on images/videos
-- Configurable confidence thresholds
-- FPS measurement and benchmarking
-
-## 🎯 Quick Start
+## Quick Start
 
 ```bash
-# 1. Install
+# Install
 git clone https://github.com/dronefreak/VisDrone-dataset-python-toolkit.git
 cd VisDrone-dataset-python-toolkit
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python3 -m venv venv && source venv/bin/activate
 pip install -e .
 
-# 2. Test with webcam (no training needed!)
+# Test instantly with webcam (no training required)
 python scripts/webcam_demo.py --model fasterrcnn_mobilenet
 
-# 3. Train on VisDrone dataset
+# Train on your data
 python scripts/train.py \
     --train-img-dir data/VisDrone2019-DET-train/images \
     --train-ann-dir data/VisDrone2019-DET-train/annotations \
     --val-img-dir data/VisDrone2019-DET-val/images \
     --val-ann-dir data/VisDrone2019-DET-val/annotations \
     --model fasterrcnn_resnet50 \
-    --epochs 50 \
-    --batch-size 4 \
-    --amp \
-    --output-dir outputs/my_model
+    --epochs 50 --batch-size 4 --amp
 
-# 4. Run inference
+# Run inference
 python scripts/inference.py \
     --checkpoint outputs/my_model/best_model.pth \
     --model fasterrcnn_resnet50 \
-    --input test_images/ \
-    --output-dir results
+    --input test_images/ --output-dir results
 ```
 
-## 📦 Installation
+---
 
-### Prerequisites
+## Features
+
+### Core Components
+
+- **PyTorch Dataset** — Native VisDrone format with automatic filtering
+- **Model Zoo** — 4 detection architectures ready for training
+- **Format Converters** — COCO and YOLO export with validation
+- **Visualization** — Publication-ready plots and detection overlays
+- **CLI Tools** — Train, evaluate, and infer with simple commands
+
+### Training Features
+
+- Mixed precision training (AMP) for 2x speedup
+- Multi-GPU support via DistributedDataParallel
+- Learning rate scheduling and gradient clipping
+- Automatic checkpointing and resumption
+- Real-time training metrics visualization
+
+### Inference Features
+
+- Real-time webcam detection
+- Batch processing for images and videos
+- Configurable confidence thresholds
+- FPS benchmarking and performance profiling
+
+---
+
+## Installation
+
+### Requirements
 
 - Python 3.8+
-- CUDA-capable GPU (recommended)
-- 8GB+ GPU memory
+- CUDA-capable GPU (recommended, 6GB+ VRAM)
+- PyTorch 2.0+
 
-### Step 1: Create Virtual Environment
+### Setup
 
 ```bash
+# 1. Virtual environment
 python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 2. PyTorch (choose one)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118  # GPU
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu    # CPU
+
+# 3. Install toolkit
+pip install -e .              # Basic
+pip install -e ".[dev]"       # With dev tools
+pip install -e ".[coco]"      # With COCO eval
 ```
 
-### Step 2: Install PyTorch
+### Dataset Download
 
-**For GPU (CUDA 11.8):**
-
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-```
-
-**For CPU only:**
-
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-```
-
-### Step 3: Install VisDrone Toolkit
-
-```bash
-# Basic installation
-pip install -e .
-
-# With development tools
-pip install -e ".[dev]"
-
-# With COCO evaluation
-pip install -e ".[coco]"
-```
-
-### Step 4: Download VisDrone Dataset
-
-Download from [VisDrone Dataset](https://github.com/VisDrone/VisDrone-Dataset) and extract:
+Download from [VisDrone Dataset](https://github.com/VisDrone/VisDrone-Dataset):
 
 ```bash
 data/
@@ -144,35 +117,32 @@ data/
     └── annotations/
 ```
 
-See [INSTALL.md](INSTALL.md) for detailed instructions.
+See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 
-## 🎓 Usage
+---
+
+## Usage
 
 ### Training
 
 ```bash
-# Basic training
+# Standard training
 python scripts/train.py \
     --train-img-dir data/train/images \
     --train-ann-dir data/train/annotations \
     --val-img-dir data/val/images \
     --val-ann-dir data/val/annotations \
     --model fasterrcnn_resnet50 \
-    --epochs 50 \
-    --batch-size 4 \
+    --epochs 50 --batch-size 4 \
     --output-dir outputs/my_model
 
-# Fast training with AMP
+# Fast training with mixed precision
 python scripts/train.py \
-    --train-img-dir data/train/images \
-    --train-ann-dir data/train/annotations \
     --model fasterrcnn_mobilenet \
-    --epochs 30 \
-    --batch-size 8 \
-    --amp \
+    --epochs 30 --batch-size 8 --amp \
     --output-dir outputs/mobilenet
 
-# Resume training
+# Resume from checkpoint
 python scripts/train.py \
     --resume outputs/my_model/checkpoint_epoch_20.pth \
     --epochs 50
@@ -187,19 +157,17 @@ python scripts/inference.py \
     --model fasterrcnn_resnet50 \
     --input image.jpg
 
-# Directory of images
+# Batch images
 python scripts/inference.py \
     --checkpoint outputs/my_model/best_model.pth \
     --model fasterrcnn_resnet50 \
-    --input test_images/ \
-    --output-dir results
+    --input test_images/ --output-dir results
 
-# Video file
+# Video processing
 python scripts/inference.py \
     --checkpoint outputs/my_model/best_model.pth \
     --model fasterrcnn_resnet50 \
-    --input video.mp4 \
-    --output-dir results
+    --input video.mp4 --output-dir results
 ```
 
 ### Webcam Demo
@@ -210,22 +178,16 @@ python scripts/webcam_demo.py \
     --checkpoint outputs/my_model/best_model.pth \
     --model fasterrcnn_resnet50
 
-# With pretrained weights (no training needed!)
+# With pre-trained COCO weights (no training needed)
 python scripts/webcam_demo.py --model fasterrcnn_mobilenet
 
-# Custom camera and threshold
+# Custom settings
 python scripts/webcam_demo.py \
-    --checkpoint outputs/my_model/best_model.pth \
     --model fasterrcnn_resnet50 \
-    --camera 1 \
-    --score-threshold 0.7
+    --camera 1 --score-threshold 0.7
 ```
 
-**Controls:**
-
-- `q` - Quit
-- `s` - Save current frame
-- `SPACE` - Pause/Resume
+**Controls:** `q` quit | `s` save frame | `SPACE` pause
 
 ### Evaluation
 
@@ -241,14 +203,14 @@ python scripts/evaluate.py \
 ### Format Conversion
 
 ```bash
-# Convert to COCO format
+# To COCO
 python scripts/convert_annotations.py \
     --format coco \
     --image-dir data/images \
     --annotation-dir data/annotations \
     --output annotations_coco.json
 
-# Convert to YOLO format
+# To YOLO
 python scripts/convert_annotations.py \
     --format yolo \
     --image-dir data/images \
@@ -260,6 +222,7 @@ python scripts/convert_annotations.py \
 
 ```python
 from visdrone_toolkit import VisDroneDataset, get_model
+from visdrone_toolkit.utils import collate_fn
 from torch.utils.data import DataLoader
 
 # Load dataset
@@ -270,11 +233,10 @@ dataset = VisDroneDataset(
     filter_crowd=True,
 )
 
-# Create model
+# Get model
 model = get_model("fasterrcnn_resnet50", num_classes=12, pretrained=True)
 
-# DataLoader
-from visdrone_toolkit.utils import collate_fn
+# Create dataloader
 loader = DataLoader(dataset, batch_size=4, collate_fn=collate_fn)
 
 # Training loop
@@ -282,21 +244,23 @@ model.train()
 for images, targets in loader:
     loss_dict = model(images, targets)
     losses = sum(loss for loss in loss_dict.values())
-    # ... backpropagation
+    # ... optimization
 ```
 
-## 🤖 Models
+---
 
-| Model                      | Speed      | Accuracy | GPU Memory | Best For                    |
-| -------------------------- | ---------- | -------- | ---------- | --------------------------- |
-| **Faster R-CNN ResNet50**  | ⭐⭐⭐     | ⭐⭐⭐⭐ | 6GB        | General use, best balance   |
-| **Faster R-CNN MobileNet** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐   | 3GB        | Real-time, edge devices     |
-| **FCOS ResNet50**          | ⭐⭐⭐     | ⭐⭐⭐⭐ | 6GB        | Dense objects, anchor-free  |
-| **RetinaNet ResNet50**     | ⭐⭐⭐     | ⭐⭐⭐⭐ | 6GB        | Class imbalance, Focal Loss |
+## Models
+
+| Model                      | Speed | Accuracy | GPU Memory | Best For                    |
+| -------------------------- | ----- | -------- | ---------- | --------------------------- |
+| **Faster R-CNN ResNet50**  | ★★★☆☆ | ★★★★☆    | 6GB        | General use, best balance   |
+| **Faster R-CNN MobileNet** | ★★★★★ | ★★★☆☆    | 3GB        | Real-time, edge devices     |
+| **FCOS ResNet50**          | ★★★☆☆ | ★★★★☆    | 6GB        | Dense objects, anchor-free  |
+| **RetinaNet ResNet50**     | ★★★☆☆ | ★★★★☆    | 6GB        | Class imbalance, focal loss |
 
 ### Performance Benchmarks
 
-On VisDrone2019-DET-val (RTX 3090, batch_size=4):
+**VisDrone2019-DET-val** (RTX 3090, batch_size=4):
 
 | Model                  | mAP@50 | FPS | Training Time (50 epochs) |
 | ---------------------- | ------ | --- | ------------------------- |
@@ -305,68 +269,13 @@ On VisDrone2019-DET-val (RTX 3090, batch_size=4):
 | FCOS ResNet50          | ~33%   | 16  | ~8 hours                  |
 | RetinaNet ResNet50     | ~34%   | 17  | ~8 hours                  |
 
-**_Note: Results depend on training configuration and dataset split_**
+_Results depend on training configuration and dataset split_
 
-## 📚 Documentation
+---
 
-- **[Installation Guide](INSTALL.md)** - Detailed setup instructions
-- **[Quick Reference](QUICKSTART.md)** - Command cheatsheet
-- **[Scripts Documentation](scripts/README.md)** - CLI tools usage
-- **[Configuration Guide](configs/README.md)** - Training configs
-- **[Test Documentation](tests/README.md)** - Running tests
-- **[Contributing Guide](CONTRIBUTING.md)** - Development workflow
-- **[Changelog](CHANGELOG.md)** - Version history
+## Advanced Usage
 
-## 💡 Examples
-
-### Example 1: Quick Webcam Test
-
-```bash
-# No training needed - uses COCO pretrained weights
-python scripts/webcam_demo.py --model fasterrcnn_mobilenet
-```
-
-### Example 2: Train Custom Model
-
-```bash
-python scripts/train.py \
-    --train-img-dir data/VisDrone2019-DET-train/images \
-    --train-ann-dir data/VisDrone2019-DET-train/annotations \
-    --val-img-dir data/VisDrone2019-DET-val/images \
-    --val-ann-dir data/VisDrone2019-DET-val/annotations \
-    --model fasterrcnn_resnet50 \
-    --epochs 50 \
-    --batch-size 4 \
-    --amp \
-    --output-dir outputs/custom_model
-```
-
-### Example 3: Batch Inference
-
-```bash
-python scripts/inference.py \
-    --checkpoint outputs/custom_model/best_model.pth \
-    --model fasterrcnn_resnet50 \
-    --input drone_videos/*.mp4 \
-    --output-dir results/batch_inference
-```
-
-### Example 4: Convert to YOLO for YOLOv8
-
-```bash
-python scripts/convert_annotations.py \
-    --format yolo \
-    --image-dir data/VisDrone2019-DET-train/images \
-    --annotation-dir data/VisDrone2019-DET-train/annotations \
-    --output-dir data/yolo/train/labels
-
-# Then use with YOLOv8
-# yolo train data=data/yolo/dataset.yaml model=yolov8n.pt
-```
-
-## 🔧 Advanced Usage
-
-### Custom Data Augmentation
+### Custom Augmentations
 
 ```python
 import albumentations as A
@@ -392,12 +301,11 @@ dataset = VisDroneDataset(
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
-# Initialize distributed training
 dist.init_process_group(backend='nccl')
 model = DistributedDataParallel(model, device_ids=[local_rank])
 ```
 
-### Export to ONNX
+### ONNX Export
 
 ```python
 import torch
@@ -405,54 +313,55 @@ import torch
 model.eval()
 dummy_input = torch.randn(1, 3, 640, 640)
 torch.onnx.export(
-    model,
-    dummy_input,
-    "model.onnx",
+    model, dummy_input, "model.onnx",
     opset_version=11,
     input_names=['input'],
     output_names=['boxes', 'labels', 'scores']
 )
 ```
 
-## 🤝 Contributing
+---
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
+## Documentation
 
-- Development setup
-- Code style guidelines
-- Pull request process
-- Issue reporting
+- [Installation Guide](INSTALL.md) — Detailed setup
+- [Quick Reference](QUICKSTART.md) — Command cheatsheet
+- [Scripts Documentation](scripts/README.md) — CLI tools
+- [Configuration Guide](configs/README.md) — Training configs
+- [Test Documentation](tests/README.md) — Running tests
+- [Contributing Guide](CONTRIBUTING.md) — Development workflow
+- [Changelog](CHANGELOG.md) — Version history
 
-### Quick Contribution Guide
+---
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick Guide
 
 ```bash
-# 1. Fork and clone
+# Fork and clone
 git clone https://github.com/YOUR_USERNAME/VisDrone-dataset-python-toolkit.git
-cd VisDrone-dataset-python-toolkit
 
-# 2. Setup development environment
-make setup-venv
-source venv/bin/activate
+# Setup dev environment
+make setup-venv && source venv/bin/activate
 make install-dev
 
-# 3. Create feature branch
-git checkout -b feature/amazing-feature
+# Make changes and test
+make format lint test
 
-# 4. Make changes and test
-make format
-make lint
-make test
-
-# 5. Commit and push
-git commit -m "Add amazing feature"
-git push origin feature/amazing-feature
-
-# 6. Open Pull Request
+# Submit PR
+git checkout -b feature/your-feature
+git commit -m "Add feature"
+git push origin feature/your-feature
 ```
 
-## 📖 Citation
+---
 
-If you use this toolkit in your research, please cite:
+## Citation
+
+If you use this toolkit, please cite:
 
 ```bibtex
 @misc{visdrone_toolkit_2025,
@@ -464,7 +373,7 @@ If you use this toolkit in your research, please cite:
 }
 ```
 
-And the original VisDrone dataset:
+Original VisDrone dataset:
 
 ```bibtex
 @article{zhu2018visdrone,
@@ -475,43 +384,33 @@ And the original VisDrone dataset:
 }
 ```
 
-## 📄 License
+---
 
-This project is licensed under the Apache License 2.0 - see [LICENSE](LICENSE) file for details.
+## License
 
-## 🙏 Acknowledgments
-
-- **VisDrone Team** - For creating and maintaining the dataset
-- **PyTorch & Torchvision** - For the excellent deep learning framework
-- **Contributors** - Everyone who has contributed to this project (just me for the moment)
-
-## 📞 Contact & Support
-
-- **Issues:** [GitHub Issues](https://github.com/dronefreak/VisDrone-dataset-python-toolkit/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/dronefreak/VisDrone-dataset-python-toolkit/discussions)
-- **Email:** <your.email@example.com>
-
-## 🌟 Star History
-
-If you find this project useful, please consider giving it a ⭐!
-
-## 🗺️ Roadmap
-
-- [ ] Support for VisDrone video tasks
-- [ ] Integration with Weights & Biases
-- [ ] TensorRT optimization
-- [ ] Docker images
-- [ ] More model architectures (DETR, YOLOv8)
-- [ ] Mobile deployment guide
-
-## 📊 Project Stats
-
-- **Version:** 2.0.0
-- **Python:** 3.8+
-- **PyTorch:** 2.0+
-- **Tests:** 66 unit tests
-- **Coverage:** >80%
-- **Models:** 4 architectures
-- **Scripts:** 5 CLI tools
+Apache License 2.0 — see [LICENSE](LICENSE)
 
 ---
+
+## Acknowledgments
+
+- **VisDrone Team** for the dataset
+- **PyTorch & Torchvision** for the framework
+- All contributors to this project
+
+---
+
+## Roadmap
+
+- [ ] VisDrone video task support
+- [ ] Weights & Biases integration
+- [ ] TensorRT optimization
+- [ ] Docker deployment
+- [ ] DETR and YOLOv8 architectures
+- [ ] Mobile deployment guide
+
+---
+
+**Project Stats:** v2.0.0 | Python 3.8+ | PyTorch 2.0+ | 66 tests | >80% coverage
+
+**Issues & Support:** [GitHub Issues](https://github.com/dronefreak/VisDrone-dataset-python-toolkit/issues)
