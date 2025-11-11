@@ -182,27 +182,22 @@ def convert_to_yolo(
     if create_yaml:
         yaml_path: Path = output_dir.parent / "dataset.yaml"
 
-        yaml_content = f
-    """
-    # VisDrone Dataset Configuration for YOLO
-    # Converted from VisDrone format
+        # Get YOLO class names (filtered or not)
+        yolo_class_names = class_names[1:] if filter_crowd else class_names
 
-    # Dataset paths
-    path: {output_dir.parent.absolute()}
-    train: images/train
-    val: images/val
-    test: images/test
+        yaml_content = {
+            "path": str(output_dir.parent.absolute()),
+            "train": "images/train",
+            "val": "images/val",
+            "test": "images/test",
+            "nc": len(yolo_class_names),
+            "names": yolo_class_names,
+            "download": "https://github.com/VisDrone/VisDrone-Dataset",
+        }
 
-    # Classes
-    nc: {len(yolo_class_names)}  # number of classes
-    names: {yolo_class_names}  # class names
-
-    # Additional info
-    download: https://github.com/VisDrone/VisDrone-Dataset
-
-    """
-    yaml_path.write_text(yaml.dump(yaml_content))
-    print(f"Dataset YAML saved to {yaml_path}")
+        with open(yaml_path, "w") as f:
+            yaml.dump(yaml_content, f, default_flow_style=False, sort_keys=False)
+        print(f"Dataset YAML saved to {yaml_path}")
 
 
 def validate_yolo_format(annotation_dir: Union[str, Path]) -> bool:

@@ -57,6 +57,21 @@ class VisDroneDataset(Dataset):
     def __len__(self) -> int:
         return len(self.image_files)
 
+    def get_image_path(self, idx: int) -> Path:
+        """Get the image file path at the given index."""
+        return self.image_files[idx]
+
+    def get_class_name(self, class_id: int) -> str:
+        """Get the class name for a given class ID."""
+        if 0 <= class_id < len(self.CLASSES):
+            return self.CLASSES[class_id]
+        return "unknown"
+
+    @classmethod
+    def get_num_classes(cls) -> int:
+        """Get the total number of classes."""
+        return len(cls.CLASSES)
+
     def _parse_annotation(self, annotation_path: Path) -> tuple[np.ndarray, np.ndarray]:
         if not annotation_path.exists():
             return np.zeros((0, 4), dtype=np.float32), np.zeros((0,), dtype=np.int64)
