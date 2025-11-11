@@ -24,6 +24,7 @@ from rich.progress import (
 from rich.table import Table
 from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
+from torchvision.models.detection.anchor_utils import AnchorGenerator
 
 from visdrone_toolkit.dataset import VisDroneDataset
 from visdrone_toolkit.utils import collate_fn, get_model, load_checkpoint, save_checkpoint
@@ -69,6 +70,9 @@ def parse_args():
 
     # Training options
     parser.add_argument("--amp", action="store_true", help="Use automatic mixed precision")
+    parser.add_argument(
+        "--reduce-anchors", action="store_true", help="Reduce anchor sizes to avoid OOM issues"
+    )
     parser.add_argument(
         "--filter-ignored", action="store_true", default=True, help="Filter ignored boxes"
     )
@@ -394,6 +398,18 @@ def main():
         num_classes=args.num_classes,
         pretrained=args.pretrained,
     )
+
+    if args.reduce_anchors:
+        console.print("[green]✓[/green] Reducing anchor sizes to avoid OOM issues")
+        if hasattr(model, "rpn") and hasattr(model.rpn, "anchor_generator"):
+            # 5 levels for ResNet50 FPN
+            small_anchors = ((16, 32), (32, 64), (64, 128), (128, 256), (256, 512))
+            aspect_ratios = ((0.5, 1.0, 2.0),) * len(small_anchors)
+            model.rpn.anchor_generator = AnchorGenerator(
+                sizes=small_anchors, aspect_ratios=aspect_ratios
+            )
+        else:
+            console.print("[red]✗[/red] Model does not support anchor generator modification.")
     model.to(device)
 
     # Count parameters

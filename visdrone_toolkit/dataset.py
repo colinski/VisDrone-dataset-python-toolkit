@@ -35,12 +35,16 @@ class VisDroneDataset(Dataset):
         transforms: Callable | None = None,
         filter_ignored: bool = True,
         filter_crowd: bool = True,
+        min_side: int = 600,
+        max_side: int = 1024,
+        max_long_side: int = 1333,
     ) -> None:
         self.image_dir = Path(image_dir)
         self.annotation_dir = Path(annotation_dir)
         self.transforms = transforms
         self.filter_ignored = filter_ignored
         self.filter_crowd = filter_crowd
+        self.min_side, self.max_side, self.max_long_side = min_side, max_side, max_long_side
 
         if not self.image_dir.exists():
             raise ValueError(f"Image directory does not exist: {self.image_dir}")
@@ -109,31 +113,57 @@ class VisDroneDataset(Dataset):
         img_path = self.image_files[idx]
         image: ImageLike = Image.open(img_path).convert("RGB")
 
+        # Load boxes & labels
         ann_path = self.annotation_dir / (img_path.stem + ".txt")
         boxes_np, labels_np = self._parse_annotation(ann_path)
 
         boxes = torch.as_tensor(boxes_np, dtype=torch.float32)
         labels = torch.as_tensor(labels_np, dtype=torch.int64)
 
-        if len(boxes) > 0:
-            area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
-        else:
-            area = torch.zeros((0,), dtype=torch.float32)
+        # Inject dummy box if no valid boxes
+        if len(boxes) == 0:
+            boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]], dtype=torch.float32)
+            labels = torch.tensor([1], dtype=torch.int64)  # assign a valid class
+
+        # Original image size
+        h, w = image.height, image.width
+
+        # Dynamic resize: short side 600–1024, long side clamp 1333
+        short_side = np.random.randint(600, 1025)
+        scale = short_side / min(h, w)
+        new_h, new_w = int(round(h * scale)), int(round(w * scale))
+
+        # Clamp long side
+        max_long = 1333
+        long_side = max(new_h, new_w)
+        if long_side > max_long:
+            scale = max_long / long_side
+            new_h, new_w = int(round(new_h * scale)), int(round(new_w * scale))
+
+        # Resize image
+        image = image.resize((new_w, new_h), Image.BILINEAR)
+
+        # Scale boxes
+        scale_w = new_w / w
+        scale_h = new_h / h
+        boxes[:, [0, 2]] *= scale_w  # x coordinates
+        boxes[:, [1, 3]] *= scale_h  # y coordinates
+
+        # Compute area
+        area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
+        iscrowd = torch.zeros((len(boxes),), dtype=torch.int64)
 
         target: dict[str, Tensor] = {
             "boxes": boxes,
             "labels": labels,
             "image_id": torch.tensor([idx]),
             "area": area,
-            "iscrowd": torch.zeros((len(boxes),), dtype=torch.int64),
+            "iscrowd": iscrowd,
         }
 
-        if self.transforms is not None:
-            image, target = self.transforms(image, target)
-        else:
-            image = torch.from_numpy(np.array(image)).permute(2, 0, 1).float() / 255.0
+        # Convert image to tensor
+        image = torch.from_numpy(np.array(image)).permute(2, 0, 1).float() / 255.0
 
-        assert isinstance(image, Tensor)
         return image, target
 
 
