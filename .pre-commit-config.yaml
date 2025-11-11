@@ -2,7 +2,7 @@
 # See https://pre-commit.com for more information
 
 default_language_version:
-  python: python3.8
+  python: python3
 
 repos:
   # Pre-commit hooks for general file checks
