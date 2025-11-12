@@ -89,7 +89,9 @@ def parse_args():
     # Checkpointing
     parser.add_argument("--output-dir", default="outputs", help="Output directory")
     parser.add_argument("--resume", help="Resume from checkpoint")
-    parser.add_argument("--save-every", type=int, default=5, help="Save checkpoint every N epochs")
+    parser.add_argument(
+        "--save-every", type=int, default=100, help="Save checkpoint every N epochs"
+    )
 
     # Device
     parser.add_argument(
