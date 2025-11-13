@@ -13,6 +13,8 @@ ImageLike = Union[Image.Image, np.ndarray, Tensor]
 
 
 class VisDroneDataset(Dataset):
+    # VisDrone dataset with multi-scale training and augmentation support.
+
     CLASSES = [
         "ignored-regions",
         "pedestrian",
@@ -35,12 +37,14 @@ class VisDroneDataset(Dataset):
         transforms: Callable | None = None,
         filter_ignored: bool = True,
         filter_crowd: bool = True,
+        multiscale_training: bool = True,
     ) -> None:
         self.image_dir = Path(image_dir)
         self.annotation_dir = Path(annotation_dir)
         self.transforms = transforms
         self.filter_ignored = filter_ignored
         self.filter_crowd = filter_crowd
+        self.multiscale_training = multiscale_training
 
         if not self.image_dir.exists():
             raise ValueError(f"Image directory does not exist: {self.image_dir}")
@@ -113,24 +117,41 @@ class VisDroneDataset(Dataset):
         ann_path = self.annotation_dir / (img_path.stem + ".txt")
         boxes_np, labels_np = self._parse_annotation(ann_path)
 
-        boxes = torch.as_tensor(boxes_np, dtype=torch.float32)
-        labels = torch.as_tensor(labels_np, dtype=torch.int64)
+        # Handle empty annotations
+        if len(boxes_np) == 0:
+            # Create dummy box to avoid training issues
+            boxes_np = np.array([[0.0, 0.0, 1.0, 1.0]], dtype=np.float32)
+            labels_np = np.array([1], dtype=np.int64)
 
-        # Inject dummy box if no valid boxes
-        if len(boxes) == 0:
-            boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]], dtype=torch.float32)
-            labels = torch.tensor([1], dtype=torch.int64)
+        # Apply augmentations if provided (albumentations)
+        if self.transforms is not None:
+            # Convert to numpy for albumentations
+            image_np = np.array(image)
+
+            transformed = self.transforms(image=image_np, bboxes=boxes_np, labels=labels_np)
+
+            image_np = transformed["image"]
+            boxes_np = np.array(transformed["bboxes"], dtype=np.float32)
+            labels_np = np.array(transformed["labels"], dtype=np.int64)
+
+            # Handle case where augmentation removed all boxes
+            if len(boxes_np) == 0:
+                boxes_np = np.array([[0.0, 0.0, 1.0, 1.0]], dtype=np.float32)
+                labels_np = np.array([1], dtype=np.int64)
+
+            # Convert to PIL for resize
+            image = Image.fromarray(image_np)
 
         # Original image size
         h, w = image.height, image.width
 
-        # AGGRESSIVE resize to prevent OOM
-        # Max size 800px long side (not 1333) - reduces anchors dramatically
-        target_short = 600
+        # Multi-scale training or fixed scale
+        target_short = np.random.randint(600, 801) if self.multiscale_training else 600
+
         scale = target_short / min(h, w)
         new_h, new_w = int(round(h * scale)), int(round(w * scale))
 
-        # Clamp long side to 800
+        # Clamp long side to 800 to prevent OOM
         max_long = 800
         long_side = max(new_h, new_w)
         if long_side > max_long:
@@ -143,6 +164,10 @@ class VisDroneDataset(Dataset):
         # Scale boxes
         scale_w = new_w / w
         scale_h = new_h / h
+
+        boxes = torch.as_tensor(boxes_np, dtype=torch.float32)
+        labels = torch.as_tensor(labels_np, dtype=torch.int64)
+
         boxes[:, [0, 2]] *= scale_w
         boxes[:, [1, 3]] *= scale_h
 

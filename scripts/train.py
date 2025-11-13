@@ -26,6 +26,7 @@ from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from torchvision.models.detection.anchor_utils import AnchorGenerator
 
+from visdrone_toolkit.augmentations import get_training_augmentation
 from visdrone_toolkit.dataset import VisDroneDataset
 from visdrone_toolkit.utils import collate_fn, get_model, load_checkpoint, save_checkpoint
 from visdrone_toolkit.visualization import plot_training_curves
@@ -84,6 +85,30 @@ def parse_args():
     )
     parser.add_argument(
         "--filter-crowd", action="store_true", default=True, help="Filter crowd regions"
+    )
+
+    # Data augmentation
+    parser.add_argument("--augmentation", action="store_true", help="Use data augmentation")
+    parser.add_argument(
+        "--multiscale", action="store_true", help="Multi-scale training (600-800px)"
+    )
+
+    # Advanced training options
+    parser.add_argument(
+        "--small-anchors", action="store_true", help="Use smaller anchors for small objects"
+    )
+    parser.add_argument(
+        "--lr-schedule",
+        default="step",
+        choices=["step", "multistep", "cosine"],
+        help="LR schedule type",
+    )
+    parser.add_argument(
+        "--lr-milestones",
+        nargs="+",
+        type=int,
+        default=[60, 80],
+        help="LR decay milestones for multistep",
     )
 
     # Checkpointing
@@ -375,20 +400,30 @@ def main():
 
     # Create datasets
     console.print("\n[yellow]Loading datasets...[/yellow]")
+    train_transforms = get_training_augmentation() if args.augmentation else None
     train_dataset = VisDroneDataset(
         image_dir=args.train_img_dir,
         annotation_dir=args.train_ann_dir,
+        transforms=train_transforms,
         filter_ignored=args.filter_ignored,
         filter_crowd=args.filter_crowd,
+        multiscale_training=args.multiscale,
     )
+
+    if args.augmentation:
+        console.print("[green]✓[/green] Using data augmentation")
+    if args.multiscale:
+        console.print("[green]✓[/green] Using multi-scale training (600-800px)")
 
     val_dataset = None
     if args.val_img_dir and args.val_ann_dir:
         val_dataset = VisDroneDataset(
             image_dir=args.val_img_dir,
             annotation_dir=args.val_ann_dir,
+            transforms=None,  # No augmentation for validation
             filter_ignored=args.filter_ignored,
             filter_crowd=args.filter_crowd,
+            multiscale_training=False,  # Fixed scale for validation
         )
 
     # Create dataloaders
@@ -420,17 +455,29 @@ def main():
         pretrained=args.pretrained,
     )
 
-    if args.reduce_anchors:
-        console.print("[green]✓[/green] Reducing anchor sizes to avoid OOM issues")
+    # Apply small anchors for small objects
+    if args.small_anchors or args.reduce_anchors:
+        console.print("[green]✓[/green] Using small anchors optimized for aerial detection")
         if hasattr(model, "rpn") and hasattr(model.rpn, "anchor_generator"):
-            # 5 levels for ResNet50 FPN
-            small_anchors = ((16, 32), (32, 64), (64, 128), (128, 256), (256, 512))
-            aspect_ratios = ((0.5, 1.0, 2.0),) * len(small_anchors)
+            # Smaller anchors: 16, 32, 64, 128, 256 (vs default 32, 64, 128, 256, 512)
+            small_anchor_sizes = ((16,), (32,), (64,), (128,), (256,))
+            aspect_ratios = ((0.5, 1.0, 2.0),) * len(small_anchor_sizes)
             model.rpn.anchor_generator = AnchorGenerator(
-                sizes=small_anchors, aspect_ratios=aspect_ratios
+                sizes=small_anchor_sizes, aspect_ratios=aspect_ratios
             )
+
+            # Also update RPN parameters for better recall
+            model.rpn.pre_nms_top_n_train = 2000
+            model.rpn.post_nms_top_n_train = 2000
+            model.rpn.pre_nms_top_n_test = 1000
+            model.rpn.post_nms_top_n_test = 1000
+
+            # Lower NMS threshold for dense scenes
+            model.roi_heads.nms_thresh = 0.3
+            model.roi_heads.score_thresh = 0.05
+            model.roi_heads.detections_per_img = 300
         else:
-            console.print("[red]✗[/red] Model does not support anchor generator modification.")
+            console.print("[red]✗[/red] Model does not support anchor modification")
     model.to(device)
 
     # Count parameters
@@ -449,11 +496,17 @@ def main():
     )
 
     # Learning rate scheduler
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer,
-        step_size=15,
-        gamma=0.1,
-    )
+    if args.lr_schedule == "multistep":
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=args.lr_milestones, gamma=0.1
+        )
+        console.print(f"[green]✓[/green] Using MultiStepLR with milestones {args.lr_milestones}")
+    elif args.lr_schedule == "cosine":
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+        console.print("[green]✓[/green] Using CosineAnnealingLR")
+    else:
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.1)
+        console.print("[green]✓[/green] Using StepLR (step_size=15)")
 
     # AMP scaler
     scaler = GradScaler() if args.amp and device.type == "cuda" else None
