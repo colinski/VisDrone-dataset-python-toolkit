@@ -49,8 +49,6 @@ def get_training_augmentation():
                 ],
                 p=0.1,
             ),
-            # Mosaic (YOLO-style)
-            A.Mosaic(p=0.3),
         ],
         bbox_params=A.BboxParams(
             format="pascal_voc",
