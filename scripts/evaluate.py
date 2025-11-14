@@ -64,7 +64,7 @@ def parse_args():
 
 
 def load_model(checkpoint_path: str, model_name: str, num_classes: int, device: torch.device):
-    """Load model from checkpoint."""
+    """Load model from checkpoint with proper architecture modifications."""
     print(f"Loading model from {checkpoint_path}...")
 
     model = get_model(
@@ -73,6 +73,33 @@ def load_model(checkpoint_path: str, model_name: str, num_classes: int, device: 
         pretrained=False,
     )
 
+    # Apply same modifications as training for Faster R-CNN
+    if model_name in ["fasterrcnn_resnet50", "fasterrcnn_mobilenet"]:
+        print("Applying small anchor modifications...")
+        from torchvision.models.detection.anchor_utils import AnchorGenerator
+
+        if hasattr(model, "rpn") and hasattr(model.rpn, "anchor_generator"):
+            # Small anchors: 16, 32, 64, 128, 256
+            small_anchor_sizes = ((16,), (32,), (64,), (128,), (256,))
+            aspect_ratios = ((0.5, 1.0, 2.0),) * len(small_anchor_sizes)
+            model.rpn.anchor_generator = AnchorGenerator(
+                sizes=small_anchor_sizes, aspect_ratios=aspect_ratios
+            )
+
+            # Update RPN parameters
+            model.rpn.pre_nms_top_n_train = 2000
+            model.rpn.post_nms_top_n_train = 2000
+            model.rpn.pre_nms_top_n_test = 1000
+            model.rpn.post_nms_top_n_test = 1000
+
+            # Lower NMS threshold for dense scenes
+            model.roi_heads.nms_thresh = 0.3
+            model.roi_heads.score_thresh = 0.05
+            model.roi_heads.detections_per_img = 300
+
+            print("✓ Small anchors and NMS settings applied")
+
+    # Load checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=device)
     if "model_state_dict" in checkpoint:
         model.load_state_dict(checkpoint["model_state_dict"])
