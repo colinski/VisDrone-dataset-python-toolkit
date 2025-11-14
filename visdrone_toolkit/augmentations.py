@@ -19,42 +19,42 @@ def get_training_augmentation():
     """
     return A.Compose(
         [
-            # Geometric augmentations
             A.HorizontalFlip(p=0.5),
             A.RandomRotate90(p=0.3),
-            A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),
-            # Color augmentations (important for drone footage)
-            A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-            A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3),
+            A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.15, rotate_limit=20, p=0.6),
+            A.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3, p=0.6),
+            A.HueSaturationValue(hue_shift_limit=15, sat_shift_limit=30, val_shift_limit=15, p=0.4),
+            A.RGBShift(r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=0.3),
             A.OneOf(
                 [
-                    A.MotionBlur(blur_limit=3, p=1.0),
-                    A.GaussianBlur(blur_limit=3, p=1.0),
+                    A.MotionBlur(blur_limit=5, p=1.0),
+                    A.GaussianBlur(blur_limit=5, p=1.0),
+                    A.MedianBlur(blur_limit=5, p=1.0),
+                ],
+                p=0.3,
+            ),
+            A.OneOf(
+                [
+                    A.GaussNoise(var_limit=(10, 50), p=1.0),
+                    A.ISONoise(p=1.0),
                 ],
                 p=0.2,
             ),
-            # Weather effects (drone footage conditions)
             A.OneOf(
                 [
-                    A.RandomFog(fog_coef_lower=0.1, fog_coef_upper=0.3, p=1.0),
-                    A.RandomSunFlare(
-                        flare_roi=(0, 0, 1, 0.5),
-                        angle_lower=0,
-                        angle_upper=1,
-                        num_flare_circles_lower=1,
-                        num_flare_circles_upper=2,
-                        src_radius=50,
-                        p=1.0,
-                    ),
+                    A.RandomFog(fog_coef_range=(0.1, 0.4), p=1.0),
+                    A.RandomRain(slant_range=(-10, 10), drop_width=1, blur_value=3, p=1.0),
+                    A.RandomShadow(p=1.0),
                 ],
-                p=0.1,
+                p=0.15,
             ),
+            A.CoarseDropout(max_holes=8, max_height=32, max_width=32, fill_value=0, p=0.2),
         ],
         bbox_params=A.BboxParams(
             format="pascal_voc",
             label_fields=["labels"],
-            min_visibility=0.3,  # Keep boxes if >30% visible
-            min_area=10.0,  # Skip tiny boxes after augmentation
+            min_visibility=0.25,
+            min_area=8.0,
         ),
     )
 
