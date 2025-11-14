@@ -49,6 +49,12 @@ def get_training_augmentation():
                 ],
                 p=0.1,
             ),
+            # Copy-paste small objects
+            A.CopyPaste(blend=True, sigma=3, pct_objects_paste=0.3, p=0.5),
+            # Mosaic (YOLO-style)
+            A.Mosaic(p=0.3),
+            # MixUp (blend two images)
+            A.MixUp(p=0.2),
         ],
         bbox_params=A.BboxParams(
             format="pascal_voc",
