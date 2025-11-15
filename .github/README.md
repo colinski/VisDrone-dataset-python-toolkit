@@ -30,14 +30,14 @@ The model demonstrates robust performance across various aerial scenarios from t
 <table>
   <tr>
     <td align="center">
-      <img src="../docs/example_1.jpg" width="400px" alt="Urban Traffic Scene"/>
+      <img src="../docs/example_1.jpg" width="400px" height="210" alt="Urban Traffic Scene"/>
       <br />
       <b>Urban Traffic Detection</b>
       <br />
       Dense vehicle and pedestrian detection in city intersection
     </td>
     <td align="center">
-      <img src="../docs/example_2.jpg" width="400px" alt="Parking Lot Scene"/>
+      <img src="../docs/example_2.jpg" width="400px" height="210" alt="Parking Lot Scene"/>
       <br />
       <b>Vertical Orientation</b>
       <br />
@@ -46,14 +46,14 @@ The model demonstrates robust performance across various aerial scenarios from t
   </tr>
   <tr>
     <td align="center">
-      <img src="../docs/example_3.jpg" width="400px" alt="Pedestrian Scene"/>
+      <img src="../docs/example_3.jpg" width="400px" height="210" alt="Pedestrian Scene"/>
       <br />
       <b>Weather Effects</b>
       <br />
       Detection of vehicles in extreme sunflare
     </td>
     <td align="center">
-      <img src="../docs/example_4.jpg" width="400px" alt="Mixed Traffic"/>
+      <img src="../docs/example_4.jpg" width="400px" height="210" alt="Mixed Traffic"/>
       <br />
       <b>Mixed Traffic Analysis</b>
       <br />
