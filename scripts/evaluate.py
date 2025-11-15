@@ -16,6 +16,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from visdrone_toolkit.dataset import VisDroneDataset
+from visdrone_toolkit.soft_nms_utils import (
+    apply_soft_nms_per_class,
+    configure_model_for_better_recall,
+)
+
+# Import TTA and Soft-NMS utilities
+from visdrone_toolkit.tta_utils import tta_inference
 from visdrone_toolkit.utils import VISDRONE_CLASSES, collate_fn, compute_metrics, get_model
 
 
@@ -43,13 +50,21 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--num-workers", type=int, default=4, help="DataLoader workers")
 
-    # Evaluation
+    # Evaluation options
     parser.add_argument(
         "--score-threshold", type=float, default=0.05, help="Score threshold for detections"
     )
     parser.add_argument(
         "--iou-threshold", type=float, default=0.5, help="IoU threshold for matching"
     )
+
+    # NEW: TTA and Soft-NMS options
+    parser.add_argument("--tta", action="store_true", help="Use test-time augmentation")
+    parser.add_argument("--soft-nms", action="store_true", help="Use soft-NMS instead of hard NMS")
+    parser.add_argument(
+        "--lower-threshold", action="store_true", help="Use lower detection threshold (0.01)"
+    )
+
     parser.add_argument(
         "--device", default="cuda" if torch.cuda.is_available() else "cpu", help="Device (cuda/cpu)"
     )
@@ -63,8 +78,14 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_model(checkpoint_path: str, model_name: str, num_classes: int, device: torch.device):
-    """Load model from checkpoint."""
+def load_model(
+    checkpoint_path: str,
+    model_name: str,
+    num_classes: int,
+    device: torch.device,
+    lower_threshold: bool = False,
+):
+    """Load model from checkpoint with proper architecture modifications."""
     print(f"Loading model from {checkpoint_path}...")
 
     model = get_model(
@@ -73,6 +94,33 @@ def load_model(checkpoint_path: str, model_name: str, num_classes: int, device: 
         pretrained=False,
     )
 
+    # Apply small anchor modifications for Faster R-CNN
+    if model_name in ["fasterrcnn_resnet50", "fasterrcnn_mobilenet"]:
+        print("Applying small anchor modifications...")
+        from torchvision.models.detection.anchor_utils import AnchorGenerator
+
+        if hasattr(model, "rpn") and hasattr(model.rpn, "anchor_generator"):
+            # Small anchors: 16, 32, 64, 128, 256
+            small_anchor_sizes = ((16,), (32,), (64,), (128,), (256,))
+            aspect_ratios = ((0.5, 1.0, 2.0),) * len(small_anchor_sizes)
+            model.rpn.anchor_generator = AnchorGenerator(
+                sizes=small_anchor_sizes, aspect_ratios=aspect_ratios
+            )
+
+            # Update RPN parameters
+            model.rpn.pre_nms_top_n_train = 2000
+            model.rpn.post_nms_top_n_train = 2000
+            model.rpn.pre_nms_top_n_test = 1000
+            model.rpn.post_nms_top_n_test = 1000
+
+            # NMS settings
+            model.roi_heads.nms_thresh = 0.3
+            model.roi_heads.score_thresh = 0.05
+            model.roi_heads.detections_per_img = 300
+
+            print("✓ Small anchors and NMS settings applied")
+
+    # Load checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=device)
     if "model_state_dict" in checkpoint:
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -80,6 +128,10 @@ def load_model(checkpoint_path: str, model_name: str, num_classes: int, device: 
             print(f"Loaded checkpoint from epoch {checkpoint['epoch']}")
     else:
         model.load_state_dict(checkpoint)
+
+    # Apply lower threshold configuration if requested
+    if lower_threshold:
+        model = configure_model_for_better_recall(model, model_name)
 
     model.to(device)
     model.eval()
@@ -95,14 +147,16 @@ def evaluate_model(
     device: torch.device,
     score_threshold: float = 0.05,
     iou_threshold: float = 0.5,
+    use_tta: bool = False,
+    use_soft_nms: bool = False,
 ) -> Dict:
-    """
-    Evaluate model on dataset.
-
-    Returns dictionary with metrics and predictions.
-    """
+    """Evaluate model on dataset with optional TTA and Soft-NMS."""
     print(f"\n{'='*60}")
     print("Running Evaluation")
+    if use_tta:
+        print("  Using Test-Time Augmentation (TTA)")
+    if use_soft_nms:
+        print("  Using Soft-NMS")
     print(f"{'='*60}")
 
     all_predictions = []
@@ -111,28 +165,46 @@ def evaluate_model(
     num_images = 0
 
     for batch_idx, (images, targets) in enumerate(data_loader):
-        # Move to device
-        images = [img.to(device) for img in images]
+        batch_start = time.time()
 
-        # Run inference
-        start_time = time.time()
-        predictions = model(images)
-        inference_time = time.time() - start_time
-        total_inference_time += inference_time
-        num_images += len(images)
+        for img, target in zip(images, targets):
+            # Use TTA if enabled
+            if use_tta:
+                pred = tta_inference(model, img, device, score_threshold)
+            else:
+                # Standard inference
+                pred = model([img.to(device)])[0]
 
-        # Process predictions
-        for pred, target in zip(predictions, targets):
-            # Filter by score threshold
-            mask = pred["scores"] >= score_threshold
-            filtered_pred = {
-                "boxes": pred["boxes"][mask],
-                "labels": pred["labels"][mask],
-                "scores": pred["scores"][mask],
-            }
+                # Filter by score threshold
+                mask = pred["scores"] >= score_threshold
+                pred = {
+                    "boxes": pred["boxes"][mask],
+                    "labels": pred["labels"][mask],
+                    "scores": pred["scores"][mask],
+                }
 
-            all_predictions.append(filtered_pred)
+            # Apply soft-NMS if enabled
+            if use_soft_nms and len(pred["boxes"]) > 0:
+                boxes, labels, scores = apply_soft_nms_per_class(
+                    pred["boxes"].cpu(),
+                    pred["labels"].cpu(),
+                    pred["scores"].cpu(),
+                    iou_threshold=0.5,
+                    sigma=0.5,
+                    score_threshold=score_threshold,
+                )
+                pred = {
+                    "boxes": boxes,
+                    "labels": labels,
+                    "scores": scores,
+                }
+
+            all_predictions.append(pred)
             all_targets.append(target)
+            num_images += 1
+
+        inference_time = time.time() - batch_start
+        total_inference_time += inference_time
 
         # Print progress
         if (batch_idx + 1) % 10 == 0:
@@ -345,10 +417,20 @@ def main():
     )
 
     # Load model
-    model = load_model(args.checkpoint, args.model, args.num_classes, device)
+    model = load_model(
+        args.checkpoint, args.model, args.num_classes, device, lower_threshold=args.lower_threshold
+    )
 
     # Evaluate
-    results = evaluate_model(model, data_loader, device, args.score_threshold, args.iou_threshold)
+    results = evaluate_model(
+        model,
+        data_loader,
+        device,
+        args.score_threshold,
+        args.iou_threshold,
+        use_tta=args.tta,
+        use_soft_nms=args.soft_nms,
+    )
 
     # Save results
     output_dir = Path(args.output_dir)

@@ -5,6 +5,8 @@ Supports inference on:
 - Single images
 - Multiple images in a directory
 - Video files
+- Test-Time Augmentation (TTA)
+- Soft-NMS post-processing
 """
 import argparse
 import time
@@ -14,6 +16,7 @@ from typing import Union
 import cv2
 import numpy as np
 import torch
+import torchvision
 from PIL import Image
 
 from visdrone_toolkit.utils import VISDRONE_CLASSES, get_model
@@ -47,6 +50,11 @@ def parse_args():
     parser.add_argument(
         "--device", default="cuda" if torch.cuda.is_available() else "cpu", help="Device (cuda/cpu)"
     )
+
+    # Post-processing options
+    parser.add_argument("--tta", action="store_true", help="Use test-time augmentation")
+    parser.add_argument("--soft-nms", action="store_true", help="Use soft-NMS instead of hard NMS")
+    parser.add_argument("--nms-threshold", type=float, default=0.5, help="NMS IoU threshold")
 
     # Visualization
     parser.add_argument("--no-save-viz", action="store_true", help="Don't save visualizations")
@@ -84,12 +92,159 @@ def load_model(checkpoint_path: str, model_name: str, num_classes: int, device: 
     return model
 
 
+def apply_soft_nms(boxes, scores, labels, sigma=0.5, score_threshold=0.001):
+    """
+    Apply Soft-NMS to detection results.
+
+    Args:
+        boxes: Detection boxes
+        scores: Detection scores
+        labels: Detection labels
+        nms_threshold: IoU threshold (for compatibility, not used in pure Soft-NMS)
+        sigma: Gaussian penalty parameter (lower = more aggressive suppression)
+        score_threshold: Minimum score to keep after penalty
+
+    Returns filtered boxes, scores, and labels.
+    """
+    # Convert to tensors if needed
+    if not isinstance(boxes, torch.Tensor):
+        boxes = torch.tensor(boxes)
+    if not isinstance(scores, torch.Tensor):
+        scores = torch.tensor(scores)
+    if not isinstance(labels, torch.Tensor):
+        labels = torch.tensor(labels)
+
+    # Get unique classes
+    unique_labels = labels.unique()
+
+    keep_boxes = []
+    keep_scores = []
+    keep_labels = []
+
+    for label in unique_labels:
+        # Filter by class
+        class_mask = labels == label
+        class_boxes = boxes[class_mask].clone()
+        class_scores = scores[class_mask].clone()
+
+        # Apply Soft-NMS per class
+        while len(class_boxes) > 0:
+            if class_scores.max() < score_threshold:
+                break
+
+            max_idx = class_scores.argmax()
+            max_box = class_boxes[max_idx]
+            max_score = class_scores[max_idx]
+
+            # Keep the max scoring box
+            keep_boxes.append(max_box)
+            keep_scores.append(max_score)
+            keep_labels.append(label)
+
+            # Remove max box
+            class_boxes = torch.cat([class_boxes[:max_idx], class_boxes[max_idx + 1 :]])
+            class_scores = torch.cat([class_scores[:max_idx], class_scores[max_idx + 1 :]])
+
+            if len(class_boxes) == 0:
+                break
+
+            # Compute IoU with remaining boxes
+            ious = torchvision.ops.box_iou(max_box.unsqueeze(0), class_boxes)[0]
+
+            # Apply Gaussian penalty (pure Soft-NMS)
+            weights = torch.exp(-(ious**2) / sigma)
+            class_scores = class_scores * weights
+
+    if len(keep_boxes) == 0:
+        return torch.empty((0, 4)), torch.empty(0), torch.empty(0, dtype=torch.long)
+
+    return torch.stack(keep_boxes), torch.stack(keep_scores), torch.stack(keep_labels)
+
+
+@torch.no_grad()
+def run_inference_with_tta(
+    model: torch.nn.Module,
+    image_tensor: torch.Tensor,
+    device: torch.device,
+    score_threshold: float = 0.5,
+) -> dict:
+    """
+    Run inference with test-time augmentation.
+
+    Averages predictions across:
+    - Original image
+    - Horizontal flip
+    - Multi-scale (0.8x, 1.0x, 1.2x)
+    """
+    h, w = image_tensor.shape[1:]
+    all_boxes = []
+    all_scores = []
+    all_labels = []
+
+    # Scales for multi-scale TTA
+    scales = [0.8, 1.0, 1.2]
+
+    for scale in scales:
+        # Resize image
+        if scale != 1.0:
+            new_h, new_w = int(h * scale), int(w * scale)
+            scaled_img = torch.nn.functional.interpolate(
+                image_tensor.unsqueeze(0), size=(new_h, new_w), mode="bilinear", align_corners=False
+            )[0]
+        else:
+            scaled_img = image_tensor
+
+        # Original + horizontal flip
+        for flip in [False, True]:
+            test_img = torch.flip(scaled_img, dims=[2]) if flip else scaled_img
+
+            # Run inference
+            predictions = model([test_img.to(device)])[0]
+
+            boxes = predictions["boxes"].cpu()
+            scores = predictions["scores"].cpu()
+            labels = predictions["labels"].cpu()
+
+            # Unflip boxes if needed
+            if flip:
+                img_w = test_img.shape[2]
+                boxes[:, [0, 2]] = img_w - boxes[:, [2, 0]]
+
+            # Unscale boxes if needed
+            if scale != 1.0:
+                boxes = boxes / scale
+
+            # Filter by score
+            mask = scores >= score_threshold
+            all_boxes.append(boxes[mask])
+            all_scores.append(scores[mask])
+            all_labels.append(labels[mask])
+
+    # Concatenate all predictions
+    if len(all_boxes) > 0 and sum(len(b) for b in all_boxes) > 0:
+        final_boxes = torch.cat([b for b in all_boxes if len(b) > 0])
+        final_scores = torch.cat([s for s in all_scores if len(s) > 0])
+        final_labels = torch.cat([l for l in all_labels if len(l) > 0])  # noqa: E741
+    else:
+        final_boxes = torch.empty((0, 4))
+        final_scores = torch.empty(0)
+        final_labels = torch.empty(0, dtype=torch.long)
+
+    return {
+        "boxes": final_boxes,
+        "labels": final_labels,
+        "scores": final_scores,
+    }
+
+
 @torch.no_grad()
 def run_inference_on_image(
     model: torch.nn.Module,
     image_path: str,
     device: torch.device,
     score_threshold: float = 0.5,
+    use_tta: bool = False,
+    use_soft_nms: bool = False,
 ) -> dict:
     """Run inference on a single image."""
     # Load image
@@ -98,14 +253,33 @@ def run_inference_on_image(
 
     # Convert to tensor
     image_tensor = torch.from_numpy(image_np).permute(2, 0, 1).float() / 255.0
-    image_tensor = image_tensor.to(device)
 
     # Run inference
     start_time = time.time()
-    predictions = model([image_tensor])[0]
+
+    if use_tta:
+        predictions = run_inference_with_tta(model, image_tensor, device, score_threshold)
+    else:
+        predictions = model([image_tensor.to(device)])[0]
+        predictions = {
+            "boxes": predictions["boxes"].cpu(),
+            "labels": predictions["labels"].cpu(),
+            "scores": predictions["scores"].cpu(),
+        }
+
     inference_time = time.time() - start_time
 
-    # Filter by score
+    # Apply Soft-NMS if enabled
+    if use_soft_nms:
+        boxes, scores, labels = apply_soft_nms(
+            predictions["boxes"],
+            predictions["scores"],
+            predictions["labels"],
+            sigma=0.5,
+        )
+        predictions = {"boxes": boxes, "labels": labels, "scores": scores}
+
+    # Filter by score threshold
     mask = predictions["scores"] >= score_threshold
     predictions = {
         "boxes": predictions["boxes"][mask],
@@ -128,6 +302,9 @@ def process_images(
     score_threshold: float,
     save_viz: bool,
     show: bool,
+    use_tta: bool = False,
+    use_soft_nms: bool = False,
+    nms_threshold: float = 0.5,
 ):
     """Process images from file or directory."""
     input_path = Path(input_path)
@@ -160,7 +337,15 @@ def process_images(
         print(f"\n[{idx}/{len(image_files)}] {image_path.name}")
 
         # Run inference
-        result = run_inference_on_image(model, image_path, device, score_threshold)
+        result = run_inference_on_image(
+            model,
+            image_path,
+            device,
+            score_threshold,
+            use_tta=use_tta,
+            use_soft_nms=use_soft_nms,
+            nms_threshold=nms_threshold,
+        )
 
         num_detections = len(result["predictions"]["boxes"])
         total_detections += num_detections
@@ -321,6 +506,12 @@ def main():
     # Load model
     model = load_model(args.checkpoint, args.model, args.num_classes, device)
 
+    # Print inference options
+    if args.tta:
+        print("✓ Using Test-Time Augmentation (6 augmentations: 3 scales × 2 flips)")
+    if args.soft_nms:
+        print(f"✓ Using Soft-NMS (threshold={args.nms_threshold})")
+
     # Check input type
     input_path = Path(args.input)
 
@@ -342,6 +533,9 @@ def main():
                 args.score_threshold,
                 not args.no_save_viz,
                 args.show,
+                use_tta=args.tta,
+                use_soft_nms=args.soft_nms,
+                nms_threshold=args.nms_threshold,
             )
     elif input_path.is_dir():
         # Directory of images
@@ -353,6 +547,9 @@ def main():
             args.score_threshold,
             not args.no_save_viz,
             args.show,
+            use_tta=args.tta,
+            use_soft_nms=args.soft_nms,
+            nms_threshold=args.nms_threshold,
         )
     else:
         raise ValueError(f"Invalid input: {input_path}")
