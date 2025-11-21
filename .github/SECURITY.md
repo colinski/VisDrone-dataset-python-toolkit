@@ -20,7 +20,7 @@ We take the security of VisDrone Toolkit seriously. If you believe you have foun
 
 ### Please Do
 
-**Report security vulnerabilities via email to: <your.email@example.com>**
+**Report security vulnerabilities via email to: <kumaar324@gmail.com>**
 
 Include the following information:
 
@@ -123,7 +123,7 @@ None yet. This is version 2.0.
 
 ## Security Contact
 
-- **Email**: <your.email@example.com>
+- **Email**: <kumaar324@gmail.com>
 - **PGP Key**: [Coming soon]
 
 ## Bug Bounty Program
