@@ -16,7 +16,7 @@ This document provides guidelines for contributing to the VisDrone Toolkit. Foll
 
 ## Code of Conduct
 
-This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to <your.email@example.com>.
+This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to <kumaar324@gmail.com>.
 
 ## How Can I Contribute?
 
@@ -85,7 +85,7 @@ We actively welcome your pull requests:
 
 ```bash
 # Fork the repository on GitHub, then:
-git clone https://github.com/YOUR_USERNAME/VisDrone-dataset-python-toolkit.git
+git clone https://github.com/dronefreak/VisDrone-dataset-python-toolkit.git
 cd VisDrone-dataset-python-toolkit
 ```
 

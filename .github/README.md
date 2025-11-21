@@ -524,7 +524,7 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ```bash
 # Fork and clone
-git clone https://github.com/YOUR_USERNAME/VisDrone-dataset-python-toolkit.git
+git clone https://github.com/dronefreak/VisDrone-dataset-python-toolkit.git
 
 # Setup dev environment
 make setup-venv && source venv/bin/activate
