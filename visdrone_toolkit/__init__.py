@@ -7,6 +7,7 @@ A comprehensive toolkit for working with the VisDrone dataset, featuring:
 - Training scripts for modern object detection models
 
 """
+
 __version__ = "2.0.0"
 __author__ = "Saumya Kumaar Saksena"
 __license__ = "Apache-2.0"

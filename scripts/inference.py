@@ -8,10 +8,12 @@ Supports inference on:
 - Test-Time Augmentation (TTA)
 - Soft-NMS post-processing
 """
+
+from __future__ import annotations
+
 import argparse
 import time
 from pathlib import Path
-from typing import Union
 
 import cv2
 import numpy as np
@@ -296,7 +298,7 @@ def run_inference_on_image(
 
 def process_images(
     model: torch.nn.Module,
-    input_path: Union[str, Path],
+    input_path: str | Path,
     output_dir: Path,
     device: torch.device,
     score_threshold: float,
@@ -328,7 +330,7 @@ def process_images(
         return
 
     print(f"\nProcessing {len(image_files)} images...")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     total_inference_time = 0
     total_detections = 0
@@ -352,7 +354,7 @@ def process_images(
         total_inference_time += result["inference_time"]
 
         print(f"  Detections: {num_detections}")
-        print(f"  Inference time: {result['inference_time']*1000:.2f}ms")
+        print(f"  Inference time: {result['inference_time'] * 1000:.2f}ms")
 
         # Visualize and save
         if save_viz:
@@ -369,12 +371,12 @@ def process_images(
             print(f"  ✓ Saved to {output_path}")
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Summary:")
     print(f"  Total images: {len(image_files)}")
     print(f"  Total detections: {total_detections}")
-    print(f"  Average inference time: {(total_inference_time/len(image_files))*1000:.2f}ms")
-    print(f"  FPS: {len(image_files)/total_inference_time:.2f}")
+    print(f"  Average inference time: {(total_inference_time / len(image_files)) * 1000:.2f}ms")
+    print(f"  FPS: {len(image_files) / total_inference_time:.2f}")
 
 
 def process_video(
@@ -411,7 +413,7 @@ def process_video(
     frame_count = 0
     total_inference_time = 0.0
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Processing frames...")
 
     try:
@@ -486,10 +488,10 @@ def process_video(
         cap.release()
         out.release()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"✓ Video saved to {output_path}")
     print(f"  Processed {frame_count} frames")
-    print(f"  Average inference FPS: {frame_count/total_inference_time:.2f}")
+    print(f"  Average inference FPS: {frame_count / total_inference_time:.2f}")
 
 
 def main():
@@ -554,9 +556,9 @@ def main():
     else:
         raise ValueError(f"Invalid input: {input_path}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Inference completed!")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":
