@@ -8,11 +8,11 @@ Supports inference on:
 - Test-Time Augmentation (TTA)
 - Soft-NMS post-processing
 """
+from __future__ import annotations
 
 import argparse
 import time
 from pathlib import Path
-from typing import Union
 
 import cv2
 import numpy as np
@@ -297,7 +297,7 @@ def run_inference_on_image(
 
 def process_images(
     model: torch.nn.Module,
-    input_path: Union[str, Path],
+    input_path: str | Path,
     output_dir: Path,
     device: torch.device,
     score_threshold: float,
