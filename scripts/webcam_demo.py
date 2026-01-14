@@ -2,6 +2,7 @@
 
 Press 'q' to quit, 's' to save a frame.
 """
+
 from __future__ import annotations
 
 from __future__ import annotations

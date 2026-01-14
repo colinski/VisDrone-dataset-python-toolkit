@@ -3,6 +3,7 @@ Visualization utilities for VisDrone dataset and predictions.
 
 Provides functions to visualize ground truth annotations and model predictions.
 """
+
 from __future__ import annotations
 
 from __future__ import annotations
