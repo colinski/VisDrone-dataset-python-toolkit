@@ -194,12 +194,12 @@ def main():
     fps_counter = FPSCounter()
 
     # Display instructions
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Webcam Demo Controls:")
     print("  'q' - Quit")
     print("  's' - Save current frame")
     print("  ' ' - Pause/Resume")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     paused = False
     frame_count = 0
@@ -289,13 +289,13 @@ def main():
         cap.release()
         cv2.destroyAllWindows()
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Session Summary:")
         print(f"  Total frames processed: {frame_count}")
         print(f"  Frames saved: {saved_count}")
         if frame_count > 0:
             print(f"  Average FPS: {fps_counter.get_fps():.2f}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":
