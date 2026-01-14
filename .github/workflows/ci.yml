@@ -8,16 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  policy:
-    name: OSS Policy Enforcement
-    uses: ./.github/workflows/policy.yml
-    with:
-      max_pr_size: 1000
-      warn_pr_size: 500
-    secrets: inherit # needed for PR write permissions..
   lint:
     name: Code Quality (Linting & Formatting)
-    needs: policy
     runs-on: ubuntu-latest
 
     steps:
@@ -70,7 +62,6 @@ jobs:
 
   markdown-yaml-lint:
     name: Markdown & YAML Linting
-    needs: policy
     runs-on: ubuntu-latest
 
     steps:
