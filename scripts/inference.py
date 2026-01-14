@@ -8,6 +8,7 @@ Supports inference on:
 - Test-Time Augmentation (TTA)
 - Soft-NMS post-processing
 """
+from __future__ import annotations
 
 from __future__ import annotations
 
