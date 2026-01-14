@@ -3,9 +3,9 @@ Visualization utilities for VisDrone dataset and predictions.
 
 Provides functions to visualize ground truth annotations and model predictions.
 """
+from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -51,10 +51,10 @@ def visualize_annotations(
     boxes: np.ndarray | torch.Tensor,
     labels: np.ndarray | torch.Tensor,
     title: str = "Ground Truth",
-    figsize: Tuple[int, int] = (12, 8),
-    save_path: Optional[str] = None,
+    figsize: tuple[int, int] = (12, 8),
+    save_path: str | None = None,
     show: bool = True,
-    ax: Optional[plt.Axes] = None,
+    ax: plt.Axes | None = None,
 ) -> Figure | SubFigure:
     """
     Visualize ground truth annotations.
@@ -139,10 +139,10 @@ def visualize_predictions(
     scores: np.ndarray | torch.Tensor,
     score_threshold: float = 0.5,
     title: str = "Predictions",
-    figsize: Tuple[int, int] = (12, 8),
-    save_path: Optional[Union[str, Path]] = None,
+    figsize: tuple[int, int] = (12, 8),
+    save_path: str | Path | None = None,
     show: bool = True,
-    ax: Optional[plt.Axes] = None,
+    ax: plt.Axes | None = None,
 ) -> Figure | SubFigure:
     """
     Visualize model predictions.
@@ -239,8 +239,8 @@ def visualize_comparison(
     pred_labels: np.ndarray | torch.Tensor,
     pred_scores: np.ndarray | torch.Tensor,
     score_threshold: float = 0.5,
-    figsize: Tuple[int, int] = (20, 8),
-    save_path: Optional[str] = None,
+    figsize: tuple[int, int] = (20, 8),
+    save_path: str | None = None,
     show: bool = True,
 ) -> Figure:
     """
@@ -291,10 +291,10 @@ def visualize_comparison(
 
 
 def plot_training_curves(
-    train_losses: List[float],
-    val_losses: Optional[List[float]] = None,
-    metrics: Optional[Dict[str, List[float]]] = None,
-    save_path: Optional[Union[str, Path]] = None,
+    train_losses: list[float],
+    val_losses: list[float] | None = None,
+    metrics: dict[str, list[float]] | None = None,
+    save_path: str | Path | None = None,
     show: bool = True,
 ) -> Figure:
     """
@@ -352,12 +352,12 @@ def plot_training_curves(
 
 
 def create_detection_grid(
-    images: List[np.ndarray | Image.Image],
-    predictions: List[Dict[str, torch.Tensor]],
+    images: list[np.ndarray | Image.Image],
+    predictions: list[dict[str, torch.Tensor]],
     score_threshold: float = 0.5,
-    grid_size: Tuple[int, int] = (2, 2),
-    figsize: Tuple[int, int] = (16, 16),
-    save_path: Optional[str] = None,
+    grid_size: tuple[int, int] = (2, 2),
+    figsize: tuple[int, int] = (16, 16),
+    save_path: str | None = None,
     show: bool = True,
 ) -> Figure:
     """
