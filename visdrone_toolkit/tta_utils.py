@@ -111,7 +111,7 @@ def merge_predictions_nms(predictions, iou_threshold=0.5):
     scores = torch.cat(all_scores, dim=0)
 
     # Apply NMS per class
-    keep_indices = []
+    keep_indices: list[torch.Tensor] = []
 
     for class_id in labels.unique():
         class_mask = labels == class_id
@@ -126,7 +126,7 @@ def merge_predictions_nms(predictions, iou_threshold=0.5):
         keep_indices.append(original_indices[keep])
 
     if len(keep_indices) > 0:
-        keep_indices = torch.cat(keep_indices)
+        keep_indices = torch.cat(keep_indices)  # type: ignore[assignment]
 
         return {
             "boxes": boxes[keep_indices],

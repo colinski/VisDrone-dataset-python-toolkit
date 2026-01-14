@@ -282,12 +282,21 @@ def load_checkpoint(
     device: str = "cuda",
 ) -> int:
     """
-    Load training checkpoint.
+    Load a trusted training checkpoint.
+
+    Security:
+        This function loads model weights only (no arbitrary object deserialization).
+        Safe against pickle-based code execution (Bandit B614 compliant).
 
     Returns:
-        Starting epoch
+        Starting epoch.
     """
-    checkpoint = torch.load(filepath, map_location=device)
+    checkpoint = torch.load(
+        filepath,
+        map_location=device,
+        weights_only=True,
+    )
+
     model.load_state_dict(checkpoint["model_state_dict"])
 
     if optimizer is not None and "optimizer_state_dict" in checkpoint:
@@ -296,7 +305,7 @@ def load_checkpoint(
     if scheduler is not None and "scheduler_state_dict" in checkpoint:
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-    epoch = checkpoint.get("epoch", 0)
+    epoch = int(checkpoint.get("epoch", 0))
     print(f"Checkpoint loaded from {filepath} (epoch {epoch})")
 
-    return int(epoch)
+    return epoch

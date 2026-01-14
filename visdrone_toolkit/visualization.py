@@ -11,6 +11,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from matplotlib.figure import Figure, SubFigure
 from PIL import Image
 
 # VisDrone class colors (RGB)
@@ -54,7 +55,7 @@ def visualize_annotations(
     save_path: Optional[str] = None,
     show: bool = True,
     ax: Optional[plt.Axes] = None,
-) -> plt.Figure:
+) -> Figure | SubFigure:
     """
     Visualize ground truth annotations.
 
@@ -82,7 +83,7 @@ def visualize_annotations(
         image = np.array(image)
 
     # Create figure
-    fig: plt.Figure
+    fig: Figure | SubFigure
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
     else:
@@ -142,7 +143,7 @@ def visualize_predictions(
     save_path: Optional[Union[str, Path]] = None,
     show: bool = True,
     ax: Optional[plt.Axes] = None,
-) -> plt.Figure:
+) -> Figure | SubFigure:
     """
     Visualize model predictions.
 
@@ -180,7 +181,7 @@ def visualize_predictions(
     scores = scores[mask]
 
     # Create figure
-    fig: plt.Figure
+    fig: Figure | SubFigure
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
     else:
@@ -241,7 +242,7 @@ def visualize_comparison(
     figsize: Tuple[int, int] = (20, 8),
     save_path: Optional[str] = None,
     show: bool = True,
-) -> plt.Figure:
+) -> Figure:
     """
     Visualize ground truth and predictions side by side.
 
@@ -295,7 +296,7 @@ def plot_training_curves(
     metrics: Optional[Dict[str, List[float]]] = None,
     save_path: Optional[Union[str, Path]] = None,
     show: bool = True,
-) -> plt.Figure:
+) -> Figure:
     """
     Plot training curves.
 
@@ -358,7 +359,7 @@ def create_detection_grid(
     figsize: Tuple[int, int] = (16, 16),
     save_path: Optional[str] = None,
     show: bool = True,
-) -> plt.Figure:
+) -> Figure:
     """
     Create a grid of detection results.
 

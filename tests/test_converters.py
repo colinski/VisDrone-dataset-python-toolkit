@@ -2,7 +2,6 @@
 Tests for annotation converters.
 """
 
-
 import pytest
 
 from visdrone_toolkit.converters import convert_to_coco, convert_to_yolo
