@@ -96,7 +96,7 @@ def apply_soft_nms_per_class(
     Returns:
         Filtered boxes, labels, scores
     """
-    keep_indices = []
+    keep_indices: list[torch.Tensor] = []
     updated_scores = scores.clone()
 
     for class_id in labels.unique():
@@ -121,7 +121,7 @@ def apply_soft_nms_per_class(
             updated_scores[original_indices] = new_scores[keep]
 
     if len(keep_indices) > 0:
-        keep_indices = torch.cat(keep_indices)
+        keep_indices = torch.cat(keep_indices)  # type: ignore[assignment]
         return boxes[keep_indices], labels[keep_indices], updated_scores[keep_indices]
     else:
         return torch.zeros((0, 4)), torch.zeros((0,), dtype=torch.long), torch.zeros((0,))

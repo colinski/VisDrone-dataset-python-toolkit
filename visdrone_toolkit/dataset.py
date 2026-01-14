@@ -143,6 +143,7 @@ class VisDroneDataset(Dataset):
             image = Image.fromarray(image_np)
 
         # Original image size
+        assert isinstance(image, Image.Image)
         h, w = image.height, image.width
 
         # Multi-scale training or fixed scale
@@ -159,7 +160,7 @@ class VisDroneDataset(Dataset):
             new_h, new_w = int(round(new_h * scale)), int(round(new_w * scale))
 
         # Resize image
-        image = image.resize((new_w, new_h), Image.BILINEAR)
+        image = image.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
         # Scale boxes
         scale_w = new_w / w

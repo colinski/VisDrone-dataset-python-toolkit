@@ -4,6 +4,7 @@ YOLO format is popular for YOLOv5, YOLOv8, and other YOLO-based detectors.
 Each annotation file contains normalized coordinates: class x_center y_center width height
 
 """
+
 from pathlib import Path
 from typing import Optional, Union
 
