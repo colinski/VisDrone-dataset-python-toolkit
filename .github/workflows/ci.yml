@@ -314,17 +314,30 @@ jobs:
       - name: Check README
         run: |
           if [ ! -f README.md ]; then
+            README_PATH="README.md"
+          elif [ -f .github/README.md ]; then
+            README_PATH=".github/README.md"
+          else
             echo "README.md not found"
             exit 1
           fi
-          if [ $(wc -l < README.md) -lt 50 ]; then
+          if [ $(wc -l < "$README_PATH") -lt 50 ]; then
             echo "README.md seems too short"
             exit 1
           fi
+          echo "✓ README.md found and validated"
 
       - name: Validate CHANGELOG
         run: |
           if [ -f CHANGELOG.md ]; then
+            CHANGELOG_PATH="CHANGELOG.md"
+          elif [ -f .github/CHANGELOG.md ]; then
+            CHANGELOG_PATH=".github/CHANGELOG.md"
+          else
+            echo "CHANGELOG.md not found"
+            exit 0
+          fi
+          if [ $(wc -l < "$CHANGELOG_PATH") -gt 10 ]; then
             echo "✓ CHANGELOG.md found"
           else
             echo "⚠ CHANGELOG.md not found (warning only)"

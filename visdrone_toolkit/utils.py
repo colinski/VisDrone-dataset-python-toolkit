@@ -3,9 +3,10 @@ Utility functions for VisDrone toolkit.
 
 Includes model factory, collate functions, and other helper utilities.
 """
+from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import torch
 from torchvision.models.detection import (
@@ -46,7 +47,7 @@ def get_model(
     model_name: str = "fasterrcnn_resnet50",
     num_classes: int = NUM_CLASSES,
     pretrained: bool = True,
-    trainable_backbone_layers: Optional[int] = None,
+    trainable_backbone_layers: int | None = None,
     **kwargs,
 ) -> Any | torch.nn.Module:
     """
@@ -129,7 +130,7 @@ def get_model(
     return model
 
 
-def collate_fn(batch: List) -> tuple:
+def collate_fn(batch: list) -> tuple:
     """
     Custom collate function for DataLoader.
 
@@ -139,10 +140,10 @@ def collate_fn(batch: List) -> tuple:
 
 
 def compute_metrics(
-    predictions: List[Dict[str, torch.Tensor]],
-    targets: List[Dict[str, torch.Tensor]],
+    predictions: list[dict[str, torch.Tensor]],
+    targets: list[dict[str, torch.Tensor]],
     iou_threshold: float = 0.5,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Compute basic detection metrics (mAP would require pycocotools).
 
@@ -257,7 +258,7 @@ def save_checkpoint(
     optimizer: torch.optim.Optimizer,
     epoch: int,
     filepath: str | Path,
-    scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+    scheduler: torch.optim.lr_scheduler._LRScheduler | None = None,
     **kwargs,
 ):
     """Save training checkpoint."""
@@ -277,8 +278,8 @@ def save_checkpoint(
 def load_checkpoint(
     filepath: str,
     model: torch.nn.Module,
-    optimizer: Optional[torch.optim.Optimizer] = None,
-    scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+    optimizer: torch.optim.Optimizer | None = None,
+    scheduler: torch.optim.lr_scheduler._LRScheduler | None = None,
     device: str = "cuda",
 ) -> int:
     """
