@@ -151,13 +151,13 @@ def evaluate_model(
     use_soft_nms: bool = False,
 ) -> Dict:
     """Evaluate model on dataset with optional TTA and Soft-NMS."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Running Evaluation")
     if use_tta:
         print("  Using Test-Time Augmentation (TTA)")
     if use_soft_nms:
         print("  Using Soft-NMS")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     all_predictions = []
     all_targets = []
@@ -211,13 +211,13 @@ def evaluate_model(
             print(f"Processed {num_images} images...")
 
     print(f"\nTotal images evaluated: {num_images}")
-    print(f"Average inference time: {(total_inference_time/num_images)*1000:.2f}ms")
-    print(f"Average FPS: {num_images/total_inference_time:.2f}")
+    print(f"Average inference time: {(total_inference_time / num_images) * 1000:.2f}ms")
+    print(f"Average FPS: {num_images / total_inference_time:.2f}")
 
     # Compute metrics
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Computing Metrics")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     metrics = compute_metrics(all_predictions, all_targets, iou_threshold)
 
@@ -232,7 +232,7 @@ def evaluate_model(
 
     # Compute per-class metrics
     print("\nPer-Class Metrics:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     per_class_metrics = compute_per_class_metrics(all_predictions, all_targets, iou_threshold)
 
@@ -436,9 +436,9 @@ def main():
     output_dir = Path(args.output_dir)
     save_results(results, output_dir, args.save_predictions)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Evaluation completed!")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":

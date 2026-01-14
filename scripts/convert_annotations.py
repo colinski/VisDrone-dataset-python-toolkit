@@ -78,14 +78,14 @@ def main():
         print(f"Error: Annotation directory does not exist: {annotation_dir}")
         return 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Converting VisDrone Annotations to {args.format.upper()} Format")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Image directory: {image_dir}")
     print(f"Annotation directory: {annotation_dir}")
     print(f"Filter ignored boxes: {not args.keep_ignored}")
     print(f"Filter crowd regions: {not args.keep_crowd}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     try:
         if args.format == "coco":
@@ -132,16 +132,16 @@ def main():
 
                 validate_yolo_format(args.output_dir)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("✓ Conversion completed successfully!")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         return 0
 
     except Exception as e:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"✗ Error during conversion: {e}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         import traceback
 
         traceback.print_exc()
