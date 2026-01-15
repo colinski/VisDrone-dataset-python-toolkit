@@ -11,8 +11,6 @@ Supports inference on:
 
 from __future__ import annotations
 
-from __future__ import annotations
-
 import argparse
 import time
 from pathlib import Path

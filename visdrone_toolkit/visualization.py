@@ -6,8 +6,6 @@ Provides functions to visualize ground truth annotations and model predictions.
 
 from __future__ import annotations
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import matplotlib.patches as patches
