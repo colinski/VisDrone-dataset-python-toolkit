@@ -70,7 +70,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const body = context.payload.pull_request.body || "";
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("OSS Policy must be invoked from a pull_request workflow.");
+            }
+
+            const body = pr.body || "";
             const required = [
               "Change type:",
               "Tests:",
@@ -91,18 +96,20 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("OSS Policy must be invoked from a pull_request workflow.");
+            }
+
             const total = (pr.additions || 0) + (pr.deletions || 0);
             const warn = Number("${{ inputs.warn_pr_size }}");
             const max  = Number("${{ inputs.max_pr_size }}");
 
-            // Enforce limits
             if (total > max) {
               core.setFailed(`PR too large (${total} LOC). Split it.`);
             } else if (total > warn) {
               core.warning(`Large PR (${total} LOC). Review carefully.`);
             }
 
-            // Determine label using consistent thresholds
             let label;
             if (total < 50) label = "size/XS";
             else if (total < 150) label = "size/S";
@@ -110,13 +117,14 @@ jobs:
             else if (total < max) label = "size/L";
             else label = "size/XL";
 
-            // Remove existing size/* labels
-            const {  existingLabels } = await github.rest.issues.listLabelsOnIssue({
-              ...context.repo,
-              issue_number: pr.number
-            });
+            const { data: existingLabels } =
+              await github.rest.issues.listLabelsOnIssue({
+                ...context.repo,
+                issue_number: pr.number
+              });
+
             const oldSizeLabels = existingLabels
-              .filter(l => l.name.startsWith('size/'))
+              .filter(l => l.name.startsWith("size/"))
               .map(l => l.name);
 
             for (const oldLabel of oldSizeLabels) {
@@ -127,7 +135,6 @@ jobs:
               });
             }
 
-            // Apply new label
             await github.rest.issues.addLabels({
               ...context.repo,
               issue_number: pr.number,
@@ -161,20 +168,32 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("OSS Policy must be invoked from a pull_request workflow.");
+            }
+
             const response = await github.rest.pulls.listFiles({
               ...context.repo,
-              pull_number: context.payload.pull_request.number,
+              pull_number: pr.number,
               per_page: 100
             });
+
+            if (response.data.length === 100) {
+              core.setFailed(
+                "PR touches more than 100 files. Split it; policy does not paginate."
+              );
+            }
+
             const filenames = response.data.map(f => f.filename);
 
             const depPatterns = [
-              /requirements/,
-              /pyproject/,
-              /package\.json/,
-              /CMakeLists\.txt/,
-              /vcpkg/,
-              /conanfile/
+              /requirements/i,
+              /pyproject/i,
+              /package\.json/i,
+              /CMakeLists\.txt/i,
+              /vcpkg/i,
+              /conanfile/i
             ];
 
             const hasDepChange = filenames.some(file =>
@@ -182,9 +201,11 @@ jobs:
             );
 
             if (hasDepChange) {
-              const body = context.payload.pull_request.body || "";
+              const body = pr.body || "";
               if (!body.includes("Dependency justification:")) {
-                core.setFailed("Dependency change detected without justification section.");
+                core.setFailed(
+                  "Dependency change detected without justification section."
+                );
               }
             }
 
@@ -195,6 +216,11 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("OSS Policy must be invoked from a pull_request workflow.");
+            }
+
             const nonCodePatterns = [
               /^docs\//i,
               /^README/i,
@@ -207,11 +233,19 @@ jobs:
               /^\.vscode\//i
             ];
 
-            const files = await github.rest.pulls.listFiles({
+            const response = await github.rest.pulls.listFiles({
               ...context.repo,
-              pull_number: context.payload.pull_request.number
+              pull_number: pr.number,
+              per_page: 100
             });
-            const touched = files.data.map(f => f.filename);
+
+            if (response.data.length === 100) {
+              core.setFailed(
+                "PR touches more than 100 files. Split it; policy does not paginate."
+              );
+            }
+
+            const touched = response.data.map(f => f.filename);
 
             const touchesCode = touched.some(f =>
               !nonCodePatterns.some(p => p.test(f))
