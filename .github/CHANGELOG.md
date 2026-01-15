@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Additional model architectures (DETR, YOLOv8, etc.)
 - Mobile deployment guide (CoreML, TFLite)
 
+## [2.10] - 2025-01-18
+
+### Add GitHub Workflows
+
+- Added policies for PRs and CI for testing
+- Added bib files for referencing
+
 ## [2.0.0] - 2025-01-15
 
 ### Major Rewrite
