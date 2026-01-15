@@ -1,0 +1,59 @@
+cff-version: 1.2.0
+message: "If you use this toolkit in your research, please cite it as below."
+type: software
+title: "VisDrone Detection Toolkit: Modern PyTorch Implementation for Aerial Object Detection"
+version: 2.0.0
+date-released: 2025-01-15
+authors:
+  - family-names: "Saksena"
+    given-names: "Saumya Kumaar"
+    orcid: "https://orcid.org/0000-0003-2213-8265"
+repository-code: "https://github.com/dronefreak/VisDrone-dataset-python-toolkit"
+url: "https://github.com/dronefreak/VisDrone-dataset-python-toolkit"
+abstract: >-
+  Modern PyTorch toolkit for the VisDrone aerial object detection dataset
+  featuring production-ready training pipelines, real-time inference, and
+  format converters. Implements state-of-the-art detection models (Faster R-CNN,
+  FCOS, RetinaNet) with mixed precision training, rich progress tracking, and
+  optimizations for small object detection in drone imagery. Achieves 13.8% F1
+  improvement over baseline through multi-scale training, data augmentation,
+  and custom anchor configurations optimized for aerial detection scenarios.
+keywords:
+  - object-detection
+  - computer-vision
+  - pytorch
+  - drone
+  - aerial-imagery
+  - faster-rcnn
+  - deep-learning
+  - visdrone
+  - torchvision
+  - small-object-detection
+  - aerial-detection
+license: Apache-2.0
+preferred-citation:
+  type: software
+  title: "VisDrone Detection Toolkit: Modern PyTorch Implementation for Aerial Object Detection"
+  authors:
+    - family-names: "Saksena"
+      given-names: "Saumya Kumaar"
+  year: 2025
+  url: "https://github.com/dronefreak/VisDrone-dataset-python-toolkit"
+  version: 2.0.0
+references:
+  - type: article
+    title: "Vision Meets Drones: A Challenge"
+    authors:
+      - family-names: "Zhu"
+        given-names: "Pengfei"
+      - family-names: "Wen"
+        given-names: "Longyin"
+      - family-names: "Bian"
+        given-names: "Xiao"
+      - family-names: "Ling"
+        given-names: "Haibin"
+      - family-names: "Hu"
+        given-names: "Qinghua"
+    journal: "arXiv preprint arXiv:1804.07437"
+    year: 2018
+    url: "https://arxiv.org/abs/1804.07437"

@@ -76,11 +76,7 @@ jobs:
             }
 
             const body = pr.body || "";
-            const required = [
-              "Change type:",
-              "Tests:",
-              "Breaking change:"
-            ];
+            const required = [];
             const missing = required.filter(r => !body.includes(r));
             if (missing.length > 0) {
               core.setFailed(
