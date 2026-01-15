@@ -1,22 +1,28 @@
+# .github/labeler.yml
 python:
-  - "**/*.py"
+  - changed-files:
+      - any-glob-to-any-file: "**/*.py"
 
 cpp:
-  - "**/*.cpp"
-  - "**/*.hpp"
-  - "**/*.h"
+  - changed-files:
+      - any-glob-to-any-file: "**/*.cpp"
+      - any-glob-to-any-file: "**/*.hpp"
+      - any-glob-to-any-file: "**/*.h"
 
 ci:
-  - ".github/workflows/**"
+  - changed-files:
+      - any-glob-to-any-file: ".github/workflows/**"
 
 documentation:
-  - "**/*.md"
-  - "docs/**"
+  - changed-files:
+      - any-glob-to-any-file: "**/*.md"
+      - any-glob-to-any-file: "docs/**"
 
 dependencies:
-  - "requirements*.txt"
-  - "pyproject.toml"
-  - "package.json"
-  - "CMakeLists.txt"
-  - "vcpkg.json"
-  - "conanfile*"
+  - changed-files:
+      - any-glob-to-any-file: "requirements*.txt"
+      - any-glob-to-any-file: "pyproject.toml"
+      - any-glob-to-any-file: "package.json"
+      - any-glob-to-any-file: "CMakeLists.txt"
+      - any-glob-to-any-file: "vcpkg.json"
+      - any-glob-to-any-file: "conanfile*"
