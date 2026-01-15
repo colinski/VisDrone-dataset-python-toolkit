@@ -1,0 +1,22 @@
+python:
+  - "**/*.py"
+
+cpp:
+  - "**/*.cpp"
+  - "**/*.hpp"
+  - "**/*.h"
+
+ci:
+  - ".github/workflows/**"
+
+documentation:
+  - "**/*.md"
+  - "docs/**"
+
+dependencies:
+  - "requirements*.txt"
+  - "pyproject.toml"
+  - "package.json"
+  - "CMakeLists.txt"
+  - "vcpkg.json"
+  - "conanfile*"
