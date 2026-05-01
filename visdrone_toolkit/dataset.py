@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Union
+from typing import Callable
 
 import numpy as np
 import torch
@@ -9,11 +9,15 @@ from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
 
-ImageLike = Union[Image.Image, np.ndarray, Tensor]
-
 
 class VisDroneDataset(Dataset):
-    # VisDrone dataset with multi-scale training and augmentation support.
+    """VisDrone dataset.
+
+    Returns uint8 images (CHW tensor) and target dicts. The dataset does no
+    resizing or normalization on its own — pass an albumentations ``transforms``
+    pipeline (e.g. ``A.Resize``, ``A.Normalize``, ``ToTensorV2``) to control
+    input size, dtype, and value range.
+    """
 
     CLASSES = [
         "ignored-regions",
@@ -30,6 +34,21 @@ class VisDroneDataset(Dataset):
         "others",
     ]
 
+    RELABEL_MAP = {
+        "ignored-regions": "ignored-regions",
+        "pedestrian": "person",
+        "people": "person",
+        "bicycle": "bicycle",
+        "car": "car",
+        "van": "van",
+        "truck": "truck",
+        "tricycle": "tricycle",
+        "awning-tricycle": "tricycle",
+        "bus": "bus",
+        "motor": "motorcycle",
+        "others": "ignored-regions",
+    }
+
     def __init__(
         self,
         image_dir: str,
@@ -37,14 +56,24 @@ class VisDroneDataset(Dataset):
         transforms: Callable | None = None,
         filter_ignored: bool = True,
         filter_crowd: bool = True,
-        multiscale_training: bool = True,
+        relabel_classes: bool = False,
     ) -> None:
         self.image_dir = Path(image_dir)
         self.annotation_dir = Path(annotation_dir)
         self.transforms = transforms
         self.filter_ignored = filter_ignored
         self.filter_crowd = filter_crowd
-        self.multiscale_training = multiscale_training
+        self.relabel_classes = relabel_classes
+
+        if relabel_classes:
+            self.classes = list(dict.fromkeys(self.RELABEL_MAP.values()))
+            name_to_id = {name: i for i, name in enumerate(self.classes)}
+            self._label_map = {
+                i: name_to_id[self.RELABEL_MAP[name]] for i, name in enumerate(self.CLASSES)
+            }
+        else:
+            self.classes = list(self.CLASSES)
+            self._label_map = None
 
         if not self.image_dir.exists():
             raise ValueError(f"Image directory does not exist: {self.image_dir}")
@@ -66,15 +95,12 @@ class VisDroneDataset(Dataset):
         return self.image_files[idx]
 
     def get_class_name(self, class_id: int) -> str:
-        """Get the class name for a given class ID."""
-        if 0 <= class_id < len(self.CLASSES):
-            return self.CLASSES[class_id]
+        if 0 <= class_id < len(self.classes):
+            return self.classes[class_id]
         return "unknown"
 
-    @classmethod
-    def get_num_classes(cls) -> int:
-        """Get the total number of classes."""
-        return len(cls.CLASSES)
+    def get_num_classes(self) -> int:
+        return len(self.classes)
 
     def _parse_annotation(self, annotation_path: Path) -> tuple[np.ndarray, np.ndarray]:
         if not annotation_path.exists():
@@ -94,9 +120,13 @@ class VisDroneDataset(Dataset):
 
                 if self.filter_ignored and score == 0:
                     continue
-                if self.filter_crowd and category == 0:
-                    continue
                 if bbox_width <= 0 or bbox_height <= 0:
+                    continue
+
+                if self._label_map is not None:
+                    category = self._label_map[category]
+
+                if self.filter_crowd and category == 0:
                     continue
 
                 x1, y1 = bbox_left, bbox_top
@@ -111,68 +141,33 @@ class VisDroneDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[Tensor, dict[str, Tensor]]:
         img_path = self.image_files[idx]
-        image: ImageLike = Image.open(img_path).convert("RGB")
+        image_np = np.array(Image.open(img_path).convert("RGB"))
 
-        # Load boxes & labels
         ann_path = self.annotation_dir / (img_path.stem + ".txt")
         boxes_np, labels_np = self._parse_annotation(ann_path)
 
-        # Handle empty annotations
         if len(boxes_np) == 0:
-            # Create dummy box to avoid training issues
             boxes_np = np.array([[0.0, 0.0, 1.0, 1.0]], dtype=np.float32)
             labels_np = np.array([1], dtype=np.int64)
 
-        # Apply augmentations if provided (albumentations)
         if self.transforms is not None:
-            # Convert to numpy for albumentations
-            image_np = np.array(image)
-
             transformed = self.transforms(image=image_np, bboxes=boxes_np, labels=labels_np)
-
             image_np = transformed["image"]
-            boxes_np = np.array(transformed["bboxes"], dtype=np.float32)
-            labels_np = np.array(transformed["labels"], dtype=np.int64)
-
-            # Handle case where augmentation removed all boxes
+            boxes_np = np.asarray(transformed["bboxes"], dtype=np.float32).reshape(-1, 4)
+            labels_np = np.asarray(transformed["labels"], dtype=np.int64).reshape(-1)
             if len(boxes_np) == 0:
                 boxes_np = np.array([[0.0, 0.0, 1.0, 1.0]], dtype=np.float32)
                 labels_np = np.array([1], dtype=np.int64)
 
-            # Convert to PIL for resize
-            image = Image.fromarray(image_np)
-
-        # Original image size
-        assert isinstance(image, Image.Image)
-        h, w = image.height, image.width
-
-        # Multi-scale training or fixed scale
-        target_short = np.random.randint(600, 801) if self.multiscale_training else 600
-
-        scale = target_short / min(h, w)
-        new_h, new_w = int(round(h * scale)), int(round(w * scale))
-
-        # Clamp long side to 800 to prevent OOM
-        max_long = 800
-        long_side = max(new_h, new_w)
-        if long_side > max_long:
-            scale = max_long / long_side
-            new_h, new_w = int(round(new_h * scale)), int(round(new_w * scale))
-
-        # Resize image
-        image = image.resize((new_w, new_h), Image.Resampling.BILINEAR)
-
-        # Scale boxes
-        scale_w = new_w / w
-        scale_h = new_h / h
+        # If transforms produced a tensor (e.g. ToTensorV2), pass through.
+        # Else convert HWC numpy → CHW tensor without value scaling.
+        if isinstance(image_np, np.ndarray):
+            image: Tensor = torch.from_numpy(np.ascontiguousarray(image_np)).permute(2, 0, 1)
+        else:
+            image = image_np
 
         boxes = torch.as_tensor(boxes_np, dtype=torch.float32)
         labels = torch.as_tensor(labels_np, dtype=torch.int64)
-
-        boxes[:, [0, 2]] *= scale_w
-        boxes[:, [1, 3]] *= scale_h
-
-        # Compute area
         area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
         iscrowd = torch.zeros((len(boxes),), dtype=torch.int64)
 
@@ -183,9 +178,6 @@ class VisDroneDataset(Dataset):
             "area": area,
             "iscrowd": iscrowd,
         }
-
-        # Convert image to tensor
-        image = torch.from_numpy(np.array(image)).permute(2, 0, 1).float() / 255.0
 
         return image, target
 
