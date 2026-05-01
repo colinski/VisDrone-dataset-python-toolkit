@@ -35,7 +35,7 @@ def get_training_augmentation():
             ),
             A.OneOf(
                 [
-                    A.GaussNoise(var_limit=(10, 50), p=1.0),
+                    A.GaussNoise(std_range=(0.01, 0.05), p=1.0),
                     A.ISONoise(p=1.0),
                 ],
                 p=0.2,
@@ -48,7 +48,13 @@ def get_training_augmentation():
                 ],
                 p=0.15,
             ),
-            A.CoarseDropout(max_holes=8, max_height=32, max_width=32, fill_value=0, p=0.2),
+            A.CoarseDropout(
+                num_holes_range=(1, 8),
+                hole_height_range=(8, 32),
+                hole_width_range=(8, 32),
+                fill=0,
+                p=0.2,
+            ),
         ],
         bbox_params=A.BboxParams(
             format="pascal_voc",
