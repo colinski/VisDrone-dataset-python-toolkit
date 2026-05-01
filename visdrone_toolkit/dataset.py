@@ -55,7 +55,6 @@ class VisDroneDataset(Dataset):
         annotation_dir: str,
         transforms: Callable | None = None,
         filter_ignored: bool = True,
-        filter_crowd: bool = True,
         relabel_classes: bool = False,
         include_pil_image: bool = False,
     ) -> None:
@@ -63,7 +62,6 @@ class VisDroneDataset(Dataset):
         self.annotation_dir = Path(annotation_dir)
         self.transforms = transforms
         self.filter_ignored = filter_ignored
-        self.filter_crowd = filter_crowd
         self.relabel_classes = relabel_classes
         self.include_pil_image = include_pil_image
 
@@ -76,6 +74,10 @@ class VisDroneDataset(Dataset):
         else:
             self.classes = list(self.CLASSES)
             self._label_map = None
+
+        self._ignored_class_id = (
+            self.classes.index("ignored-regions") if "ignored-regions" in self.classes else None
+        )
 
         if not self.image_dir.exists():
             raise ValueError(f"Image directory does not exist: {self.image_dir}")
@@ -128,9 +130,6 @@ class VisDroneDataset(Dataset):
                 if self._label_map is not None:
                     category = self._label_map[category]
 
-                if self.filter_crowd and category == 0:
-                    continue
-
                 x1, y1 = bbox_left, bbox_top
                 x2, y2 = bbox_left + bbox_width, bbox_top + bbox_height
                 boxes.append([x1, y1, x2, y2])
@@ -169,16 +168,32 @@ class VisDroneDataset(Dataset):
         else:
             image = image_np
 
-        boxes = torch.as_tensor(boxes_np, dtype=torch.float32)
-        labels = torch.as_tensor(labels_np, dtype=torch.int64)
-        label_names = [self.classes[i] for i in labels.tolist()]
+        boxes_all = torch.as_tensor(boxes_np, dtype=torch.float32)
+        labels_all = torch.as_tensor(labels_np, dtype=torch.int64)
+
+        if self._ignored_class_id is not None:
+            is_ignored = labels_all == self._ignored_class_id
+            ignored_boxes = boxes_all[is_ignored]
+            boxes = boxes_all[~is_ignored]
+            labels_global = labels_all[~is_ignored]
+        else:
+            ignored_boxes = torch.zeros((0, 4), dtype=torch.float32)
+            boxes = boxes_all
+            labels_global = labels_all
+
+        present = sorted(set(labels_global.tolist()))
+        prompts = [self.classes[i] for i in present]
+        remap = {gid: i for i, gid in enumerate(present)}
+        labels = torch.tensor([remap[i] for i in labels_global.tolist()], dtype=torch.int64)
+
         area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
         iscrowd = torch.zeros((len(boxes),), dtype=torch.int64)
 
         target = {
             "boxes": boxes,
             "labels": labels,
-            "label_names": label_names,
+            "prompts": prompts,
+            "ignored_boxes": ignored_boxes,
             "image_id": torch.tensor([idx]),
             "area": area,
             "iscrowd": iscrowd,
