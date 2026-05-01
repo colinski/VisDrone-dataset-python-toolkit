@@ -140,6 +140,57 @@ def collate_fn(batch: list) -> tuple:
     return tuple(zip(*batch))
 
 
+def ov_collate(batch: list) -> dict:
+    """Collate VisDroneDataset items for OV detection.
+
+    Builds a batch-wide prompt vocab as the union of each item's prompts in
+    first-occurrence order, remaps per-image local label ids into that union,
+    and slices GT boxes per (image, prompt) — the input format expected by
+    the per-(image, prompt) Hungarian matcher.
+
+    Boxes are converted to cxcywh-normalized using the stacked image size.
+
+    Returns:
+        images:        Tensor [B, 3, H, W]
+        target_boxes:  list[Tensor] of length B*N, each [m, 4] cxcywh-normalized
+                       (image-major: index b*N + p is the (image b, prompt p) entry)
+        ignored_boxes: list[Tensor] of length B, each [k, 4] cxcywh-normalized
+        prompts:       list[str] of length N (the batch-wide vocab)
+    """
+    images = torch.stack([item[0] for item in batch])
+    H, W = images.shape[-2:]
+    scale = torch.tensor([W, H, W, H], dtype=torch.float32)
+
+    def to_cxcywh_norm(boxes_xyxy: torch.Tensor) -> torch.Tensor:
+        x1, y1, x2, y2 = boxes_xyxy.unbind(-1)
+        return torch.stack(
+            [(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1], dim=-1
+        ) / scale
+
+    prompts = list(dict.fromkeys(p for _, t in batch for p in t["prompts"]))
+    name_to_id = {name: i for i, name in enumerate(prompts)}
+    N = len(prompts)
+
+    target_boxes: list[torch.Tensor] = []
+    ignored_boxes: list[torch.Tensor] = []
+    for _, t in batch:
+        global_labels = torch.tensor(
+            [name_to_id[t["prompts"][int(l)]] for l in t["labels"].tolist()],
+            dtype=torch.int64,
+        )
+        boxes_cx = to_cxcywh_norm(t["boxes"])
+        for p in range(N):
+            target_boxes.append(boxes_cx[global_labels == p])
+        ignored_boxes.append(to_cxcywh_norm(t["ignored_boxes"]))
+
+    return {
+        "images": images,
+        "target_boxes": target_boxes,
+        "ignored_boxes": ignored_boxes,
+        "prompts": prompts,
+    }
+
+
 def compute_metrics(
     predictions: list[dict[str, torch.Tensor]],
     targets: list[dict[str, torch.Tensor]],
