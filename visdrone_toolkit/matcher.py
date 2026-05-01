@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import torch
 from sam3.model.box_ops import box_cxcywh_to_xyxy, generalized_box_iou
 from scipy.optimize import linear_sum_assignment
