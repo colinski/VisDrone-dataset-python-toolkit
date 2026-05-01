@@ -57,6 +57,7 @@ class VisDroneDataset(Dataset):
         filter_ignored: bool = True,
         filter_crowd: bool = True,
         relabel_classes: bool = False,
+        include_pil_image: bool = False,
     ) -> None:
         self.image_dir = Path(image_dir)
         self.annotation_dir = Path(annotation_dir)
@@ -64,6 +65,7 @@ class VisDroneDataset(Dataset):
         self.filter_ignored = filter_ignored
         self.filter_crowd = filter_crowd
         self.relabel_classes = relabel_classes
+        self.include_pil_image = include_pil_image
 
         if relabel_classes:
             self.classes = list(dict.fromkeys(self.RELABEL_MAP.values()))
@@ -141,7 +143,8 @@ class VisDroneDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[Tensor, dict[str, Tensor]]:
         img_path = self.image_files[idx]
-        image_np = np.array(Image.open(img_path).convert("RGB"))
+        pil_image = Image.open(img_path).convert("RGB")
+        image_np = np.array(pil_image)
 
         ann_path = self.annotation_dir / (img_path.stem + ".txt")
         boxes_np, labels_np = self._parse_annotation(ann_path)
@@ -180,6 +183,8 @@ class VisDroneDataset(Dataset):
             "area": area,
             "iscrowd": iscrowd,
         }
+        if self.include_pil_image:
+            target["pil_image"] = pil_image
 
         return image, target
 
