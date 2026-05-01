@@ -7,7 +7,7 @@ name = "visdrone-toolkit"
 version = "2.0.0"
 description = "Modern PyTorch-based toolkit for VisDrone dataset with object detection models"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "Saumya Kumaar Saksena", email = "kumaar324@gmail.com"}
@@ -48,6 +48,7 @@ dependencies = [
     "matplotlib>=3.5.0",
     "opencv-python>=4.7.0",
     "tqdm>=4.65.0",
+    "albumentations>=2.0",
 ]
 
 [project.optional-dependencies]
