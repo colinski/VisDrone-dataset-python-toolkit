@@ -168,12 +168,14 @@ class VisDroneDataset(Dataset):
 
         boxes = torch.as_tensor(boxes_np, dtype=torch.float32)
         labels = torch.as_tensor(labels_np, dtype=torch.int64)
+        label_names = [self.classes[i] for i in labels.tolist()]
         area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
         iscrowd = torch.zeros((len(boxes),), dtype=torch.int64)
 
-        target: dict[str, Tensor] = {
+        target = {
             "boxes": boxes,
             "labels": labels,
+            "label_names": label_names,
             "image_id": torch.tensor([idx]),
             "area": area,
             "iscrowd": iscrowd,
