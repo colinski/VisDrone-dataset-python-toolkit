@@ -156,6 +156,11 @@ def ov_collate(batch: list) -> dict:
                        (image-major: index b*N + p is the (image b, prompt p) entry)
         ignored_boxes: list[Tensor] of length B, each [k, 4] cxcywh-normalized
         prompts:       list[str] of length N (the batch-wide vocab)
+        img_ids:       Tensor [B*N] of long, image index per query (image-major)
+        text_ids:      Tensor [B*N] of long, prompt index per query (image-major)
+        num_boxes:     Tensor [B*N] of long, GT count per query
+        boxes_packed:  Tensor [sum(num_boxes), 4] cxcywh-normalized,
+                       concatenation of target_boxes
     """
     images = torch.stack([item[0] for item in batch])
     H, W = images.shape[-2:]
@@ -183,11 +188,23 @@ def ov_collate(batch: list) -> dict:
             target_boxes.append(boxes_cx[global_labels == p])
         ignored_boxes.append(to_cxcywh_norm(t["ignored_boxes"]))
 
+    B = images.shape[0]
+    img_ids = torch.arange(B).repeat_interleave(N)
+    text_ids = torch.arange(N).repeat(B)
+    num_boxes = torch.tensor([tb.shape[0] for tb in target_boxes], dtype=torch.int64)
+    boxes_packed = (
+        torch.cat(target_boxes) if len(target_boxes) else torch.zeros(0, 4)
+    )
+
     return {
         "images": images,
         "target_boxes": target_boxes,
         "ignored_boxes": ignored_boxes,
         "prompts": prompts,
+        "img_ids": img_ids,
+        "text_ids": text_ids,
+        "num_boxes": num_boxes,
+        "boxes_packed": boxes_packed,
     }
 
 
